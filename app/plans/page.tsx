@@ -102,9 +102,6 @@ export default function PlansPage() {
                   <p className="text-2xl sm:text-4xl font-mono font-bold text-[#22C55E] mt-1 truncate">
                     {p.weeklyRoi}%
                   </p>
-                  <p className={`text-xs mt-1 ${selectedPlan === i ? 'text-[#A8ACB3]' : 'text-[#5B616E]'}`}>
-                    ROI in 7 days
-                  </p>
                 </div>
 
                 <div className={`p-3 rounded-xl border ${selectedPlan === i ? 'bg-[#12161A] border-[#202722]' : 'bg-white border-[#DEE1E6]'}`}>

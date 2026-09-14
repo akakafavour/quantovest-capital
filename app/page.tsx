@@ -229,7 +229,6 @@ export default function Homepage() {
               <div className="p-4 bg-[#22C55E]/10 rounded-xl border border-[#22C55E]/30 space-y-1">
                 <p className="text-xs text-[#A8ACB3]">ROI in 7 days</p>
                 <p className="text-3xl font-mono text-[#22C55E] font-bold">15%</p>
-                <p className="text-xs text-[#A8ACB3]">ROI in 7 days</p>
               </div>
               <ul className="space-y-3 text-xs text-[#A8ACB3]">
                 <li className="flex items-center gap-2"><Icon icon="solar:check-circle-bold" className="w-4 h-4 text-[#22C55E]" /> FX & Top Crypto Asset Access</li>
@@ -254,7 +253,6 @@ export default function Homepage() {
               <div className="p-4 bg-[#22C55E]/10 rounded-xl border border-[#22C55E]/30 space-y-1">
                 <p className="text-xs text-[#A8ACB3]">ROI in 7 days</p>
                 <p className="text-3xl font-mono text-[#22C55E] font-bold">25%</p>
-                <p className="text-xs text-[#A8ACB3]">ROI in 7 days</p>
               </div>
               <ul className="space-y-3 text-xs text-[#A8ACB3]">
                 <li className="flex items-center gap-2"><Icon icon="solar:check-circle-bold" className="w-4 h-4 text-[#22C55E]" /> FX, Crypto & US Stock Equities</li>
@@ -276,7 +274,6 @@ export default function Homepage() {
               <div className="p-4 bg-[#22C55E]/10 rounded-xl border border-[#22C55E]/30 space-y-1">
                 <p className="text-xs text-[#A8ACB3]">ROI in 7 days</p>
                 <p className="text-3xl font-mono text-[#22C55E] font-bold">35%</p>
-                <p className="text-xs text-[#A8ACB3]">ROI in 7 days</p>
               </div>
               <ul className="space-y-3 text-xs text-[#A8ACB3]">
                 <li className="flex items-center gap-2"><Icon icon="solar:check-circle-bold" className="w-4 h-4 text-[#22C55E]" /> Full Multi-Asset VIP Access</li>
