@@ -27,7 +27,7 @@ const fallbackProfile = (actor: Actor) => ({
   payoutDetails: null,
   notificationPrefs: null,
   twoFactorEnabled: false,
-  twoFactorSecret: null,
+  accountStatus: null,
 });
 
 async function readSupabaseProfile(actor: Actor) {
@@ -77,7 +77,7 @@ async function readSupabaseProfile(actor: Actor) {
     payoutDetails: userRow?.payoutDetails ?? null,
     notificationPrefs: userRow?.notificationPrefs ?? null,
     twoFactorEnabled: userRow?.twoFactorEnabled ?? false,
-    twoFactorSecret: userRow?.twoFactorSecret ?? null,
+    accountStatus: (account as { status?: string } | undefined)?.status ?? null,
   };
 }
 
@@ -170,7 +170,7 @@ export async function GET() {
         payoutDetails: userRow.payoutDetails ?? null,
         notificationPrefs: userRow.notificationPrefs ?? null,
         twoFactorEnabled: userRow.twoFactorEnabled ?? false,
-        twoFactorSecret: userRow.twoFactorSecret ?? null,
+        accountStatus: account?.status ?? null,
       });
     } catch (dbErr) {
       console.error('[investor-profile] Drizzle read failed; using Supabase fallback', dbErr);
