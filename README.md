@@ -60,9 +60,9 @@ Admin selects an investor and applies the fixed plan rate; the investor's balanc
 5. **Dashboard** → see portfolio balance, performance chart, ROI updates, activity log
 6. **Copy Trader** → after approved funding and KYC, browse portfolio managers and select one active manager (requires min $1,500 balance)
 7. **Upgrade Plan** → Starter ($1,500) → Growth ($7,500) → Elite ($45,000) — upgrades when the account balance qualifies and records a plan-transition audit entry
-8. **Withdraw** → enter amount → 2FA verification if enabled → admin processes → money sent
-9. **Close Account** → withdraw entire balance → admin approves → account closed
-10. **Settings** → configure 2FA, payout details, notification preferences
+8. **Withdraw** → enter amount (account balance must be ≥ **$3,000**) → 6-digit authenticator code if 2FA is enabled (verified server-side) → admin processes → money sent
+9. **Close Account** → tick "Close Account & Withdraw Entire Balance" (amount must equal the full balance) → account is frozen as `closing` → admin approves → payout processed, plan cleared, account set to `closed` (rejecting reverts to `active` with balance refunded)
+10. **Settings** → configure 2FA (TOTP via `/api/auth/2fa`), payout details, notification preferences
 
 #### Admin Journey
 1. **Login** → `/admin/login` → Supabase Auth + role check (must be `admin` role in DB)
@@ -84,12 +84,12 @@ Admin selects an investor and applies the fixed plan rate; the investor's balanc
 |---|---|
 | **Single Active Plan** | Each investor has one plan at a time. Plans are set by admin (Assign Plan) or by an in-app purchase — never auto-assigned by a deposit. |
 | **Manual Performance Credit** | Starter=15%, Growth=25%, Elite=35% per 7-day cycle — admin applies the plan’s fixed rate per investor |
-| **Close Account** | Withdraw entire balance + close account in one action |
-| **2FA (TOTP)** | Optional. If enabled, withdrawals require a 6-digit authenticator code |
-| **Email System** | 12 templates (deposit, withdrawal, KYC, ROI, security, broadcast) via Resend |
+| **Close Account** | Withdraw entire balance + close account in one request; status flows `active` → `closing` → `closed`, deposits/swaps/copy blocked while closing |
+| **2FA (TOTP)** | Optional. If enabled, withdrawals require a 6-digit code verified server-side against the stored secret (secret is never sent to the browser) |
+| **Email System** | 15 templates (deposit, withdrawal, KYC, ROI, referral, security, broadcast) via Resend |
 | **Notifications** | In-app bell icon + optional email. Security/financial emails are always-on |
 | **ROI Calculator** | Interactive simple-return projection with transparent assumptions and risk disclosure |
-| **Mobile Responsive** | Bottom nav on mobile, sidebar on desktop, drawer menus |
+| **Mobile Responsive** | Slide-in drawer + sticky header on mobile, fixed sidebar on desktop |
 | **Legal Pages** | Full Privacy Policy, Terms of Service, Risk Disclosure |
 
 ### Architecture
@@ -100,7 +100,7 @@ Frontend (Next.js App Router)
 ├── Investor Portal (dark mode) — Dashboard, Deposit, Withdraw, Settings, etc.
 └── Admin Panel (dark mode) — Dashboard, Deposits, KYC, ROI, Notifications, etc.
 
-API Routes (server-side, 25+ endpoints)
+API Routes (server-side, 50+ endpoints)
 ├── /api/auth/* — Signup, session check
 ├── /api/deposits, /api/withdrawals, /api/kyc — Investor CRUD
 ├── /api/investor-profile, /api/investor/upgrade — Profile & plan management
@@ -120,13 +120,13 @@ Database (Supabase Postgres via Drizzle ORM)
 └── referral* — referral tracking tables
 
 Auth (Supabase Auth)
-├── Email/password signup + Google/Apple OAuth
+├── Email/password signup + Google OAuth
 ├── Middleware checks session cookie on every request
 ├── Route protection (public/investor/admin)
 └── Admin role verified from DB (not client-side)
 
 Email (Resend integration)
-├── 12 HTML templates (deposit, KYC, withdrawal, ROI, security, broadcast)
+├── 15 HTML templates (deposit, KYC, withdrawal, ROI, referral, security, broadcast)
 ├── Falls back to console logging in dev mode
 └── Security/financial emails always send (ignores preferences)
 ```
@@ -229,7 +229,7 @@ All project handoff and QA documentation is consolidated in [`docs/quantovest/`]
 
 ```
 app/
-├── page.tsx                    # Homepage with live crypto prices
+├── page.tsx                    # Homepage (hero, stats, plans, calculator)
 ├── layout.tsx                  # Root layout
 ├── globals.css                 # Design tokens + global styles
 ├── how-it-works/               # How It Works page
@@ -248,22 +248,27 @@ app/
 ├── dashboard/
 │   ├── page.tsx                # Portfolio balance, chart, activity
 │   ├── deposit/                # Deposit with proof upload
-│   ├── withdraw/               # Withdraw + close account
+│   ├── withdraw/               # Withdraw + close-account request
 │   ├── traders/                # Copy traders
 │   ├── settings/               # 2FA, payout details, notifications
 │   ├── kyc/                    # KYC document upload
-│   └── referrals/              # Referral program
+│   ├── referrals/              # Referral program
+│   ├── history/                # Transaction history + export
+│   ├── portfolio/              # Holdings + allocation
+│   └── swap/                   # Asset swap
 ├── admin/
-│   ├── page.tsx                # AUM, pending counts
+│   ├── page.tsx                # AUM, pending counts, quick announcement composer
 │   ├── login/                  # Admin login
 │   ├── deposits/               # Deposit approval queue
-│   ├── withdrawals/            # Withdrawal approval queue
+│   ├── withdrawals/            # Withdrawal + account-closure approval queue
 │   ├── kyc/                    # KYC review queue
-│   ├── performance/            # One-click ROI publish
+│   ├── performance/            # Per-investor ROI entry (+ [investorId] detail)
 │   ├── traders/                # Trader management
-│   ├── notifications/          # Messaging composer
+│   ├── notifications/          # Messaging composer (all / personal / plan)
 │   ├── plans/                  # Plan management
-│   ├── investors/              # Investor list
+│   ├── investors/              # Investor table (+ [id] detail)
+│   ├── referrals/              # Referral payout queue
+│   ├── support/                # Tawk.to dashboard link
 │   └── settings/               # Platform settings
 └── api/                        # 25+ server-side API routes
     ├── auth/signup/            # User creation + DB row
@@ -292,6 +297,8 @@ components/
 ├── InvestorSidebar.tsx         # Investor sidebar + mobile bottom nav
 ├── AdminSidebar.tsx            # Admin sidebar + mobile bottom nav
 ├── NotificationCenter.tsx      # Bell icon + notification dropdown
+├── TawkToWidget.tsx            # Tawk.to live-chat widget
+├── DashboardAreaChart.tsx      # Portfolio performance chart
 ├── OnboardingModal.tsx         # Post-signup wizard
 ├── KycModal.tsx                # KYC prompt overlay
 ├── FundingWarningModal.tsx     # Insufficient balance alert
