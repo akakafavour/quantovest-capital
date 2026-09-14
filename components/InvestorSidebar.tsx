@@ -148,13 +148,7 @@ export default function InvestorSidebar({ onOpenDeposit, onOpenWithdraw, onOpenC
         </nav>
 
         <div className="p-4 border-t border-[#202A2D] text-xs space-y-2">
-          <div className="flex items-center justify-between text-[#8D9994] text-[11px]">
-            <span>Identity KYC Status</span>
-            <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold ${user.kycStatus === 'approved' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : user.kycStatus === 'pending' ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'}`}>
-              {user.kycStatus === 'approved' ? 'VERIFIED' : user.kycStatus === 'pending' ? 'PENDING' : 'UNVERIFIED'}
-            </span>
-          </div>
-          <button onClick={handleLogout} className="flex items-center gap-2 text-[#8D9994] hover:text-[#F4F7F3] text-xs pt-2 border-t border-[#202A2D]">
+          <button onClick={handleLogout} className="flex items-center gap-2 text-[#8D9994] hover:text-[#F4F7F3] text-xs">
             <Icon icon="solar:logout-3-bold" className="w-4 h-4" />Logout
           </button>
         </div>
@@ -178,8 +172,7 @@ export default function InvestorSidebar({ onOpenDeposit, onOpenWithdraw, onOpenC
           {navLinks.map((link) => { const isActive = pathname === link.href; return <Link key={link.href} href={link.href} className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${isActive ? 'bg-[#4ADE80] text-[#07110B] font-semibold shadow-[0_8px_24px_rgba(74,222,128,0.16)]' : 'text-[#9AA7A0] hover:text-[#F4F7F3] hover:bg-[#172124]'}`}><Icon icon={link.icon} className={`w-5 h-5 ${isActive ? 'text-[#07110B]' : 'text-[#4ADE80]'}`} /><span>{link.label}</span></Link>; })}
         </nav>
         <div className="p-4 border-t border-[#202A2D] text-xs space-y-2">
-          <div className="flex items-center justify-between text-[#8D9994] text-[11px]"><span>Identity KYC Status</span><span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold ${user.kycStatus === 'approved' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : user.kycStatus === 'pending' ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'}`}>{user.kycStatus === 'approved' ? 'VERIFIED' : user.kycStatus === 'pending' ? 'PENDING' : 'UNVERIFIED'}</span></div>
-          <button onClick={handleLogout} className="flex items-center gap-2 text-[#8D9994] hover:text-[#F4F7F3] text-xs pt-2 border-t border-[#202A2D]"><Icon icon="solar:logout-3-bold" className="w-4 h-4" />Logout</button>
+          <button onClick={handleLogout} className="flex items-center gap-2 text-[#8D9994] hover:text-[#F4F7F3] text-xs"><Icon icon="solar:logout-3-bold" className="w-4 h-4" />Logout</button>
         </div>
       </aside>
     </>
