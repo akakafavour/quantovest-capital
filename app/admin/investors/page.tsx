@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import AdminSidebar from '@/components/AdminSidebar';
 import EmptyState from '@/components/admin/EmptyState';
 import { Icon } from '@iconify/react';
@@ -73,9 +73,9 @@ function formatCents(cents: number): string {
   return '$' + (cents / 100).toLocaleString('en-US');
 }
 
-export default function AdminInvestorsPage() {
-  const router = useRouter();
+const PAGE_SIZE = 10;
 
+export default function AdminInvestorsPage() {
   const [investors, setInvestors] = useState<InvestorRow[]>([]);
   const [kycApps, setKycApps] = useState<KycRow[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRow[]>([]);
@@ -84,6 +84,7 @@ export default function AdminInvestorsPage() {
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -150,6 +151,12 @@ export default function AdminInvestorsPage() {
     return (inv.name?.toLowerCase().includes(q) || inv.email?.toLowerCase().includes(q));
   });
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const paged = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+  const rangeStart = filtered.length === 0 ? 0 : safePage * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(filtered.length, (safePage + 1) * PAGE_SIZE);
+
   function getKycForInvestor(investorId: string): KycRow[] {
     return kycApps.filter(k => k.investorId === investorId);
   }
@@ -195,7 +202,7 @@ export default function AdminInvestorsPage() {
             <Icon icon="solar:magnifer-bold" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#7F8C86]" />
             <input
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => { setSearchQuery(e.target.value); setPage(0); }}
               placeholder="Search by name or email..."
               className="w-full rounded-xl border border-[#2B393F] bg-[#151E23] pl-10 pr-4 py-3 text-sm text-white placeholder-[#7F8C86]"
             />
@@ -216,8 +223,20 @@ export default function AdminInvestorsPage() {
             icon="solar:user-bold"
           />
         ) : (
-          <div className="space-y-3">
-            {filtered.map(inv => {
+          <div className="rounded-2xl border border-[#2B393F] bg-[#151E23] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left">
+                <thead>
+                  <tr className="border-b border-[#2B393F] text-[10px] uppercase font-mono text-[#7F8C86]">
+                    <th className="px-4 py-3 font-medium">Investor</th>
+                    <th className="px-4 py-3 font-medium">Plan</th>
+                    <th className="px-4 py-3 font-medium text-right">Balance</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium text-right">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+            {paged.map(inv => {
               const isExpanded = expandedId === inv.id;
               const kycStatus = getLatestKycStatus(inv.id);
               const investorWithdrawals = getWithdrawalsForInvestor(inv.id);
@@ -232,59 +251,53 @@ export default function AdminInvestorsPage() {
               ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
               return (
-                <div key={inv.id} className="bg-[#151E23] border border-[#2B393F] rounded-2xl overflow-hidden">
-                  <button
+                <React.Fragment key={inv.id}>
+                  <tr
                     onClick={() => setExpandedId(isExpanded ? null : inv.id)}
-                    className="w-full p-5 flex flex-col sm:flex-row sm:items-center gap-4 text-left hover:bg-[#1A252C] transition-colors"
+                    className="border-b border-[#2B393F]/60 hover:bg-[#1A252C] transition-colors cursor-pointer"
                   >
-                    <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div>
-                        <p className="text-[10px] uppercase font-mono text-[#93A09A]">Name</p>
-                        <p className="text-sm font-semibold text-[#E8EFEB] truncate">{inv.name ?? 'Unnamed'}</p>
-                        <p className="text-[10px] text-[#7F8C86] font-mono truncate">{inv.email}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase font-mono text-[#93A09A]">Plan</p>
-                        <p className="text-sm text-[#E8EFEB]">{inv.planName ?? '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase font-mono text-[#93A09A]">Balance</p>
-                        <p className="text-sm font-mono text-[#22C55E]">{formatCents(inv.balanceCents)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase font-mono text-[#93A09A]">Status</p>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {kycStatus && (
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
-                              kycStatus === 'approved'
-                                ? 'bg-[#22C55E]/10 text-[#22C55E]'
-                                : kycStatus === 'pending'
-                                ? 'bg-amber-500/10 text-amber-400'
-                                : 'bg-rose-500/10 text-rose-400'
-                            }`}>
-                              KYC: {kycStatus}
-                            </span>
-                          )}
+                    <td className="px-4 py-3">
+                      <p className="text-xs font-semibold text-[#E8EFEB] truncate max-w-[220px]">{inv.name ?? 'Unnamed'}</p>
+                      <p className="text-[10px] text-[#7F8C86] font-mono truncate max-w-[220px]">{inv.email}</p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-[#E8EFEB]">{inv.planName ?? '—'}</td>
+                    <td className="px-4 py-3 text-xs font-mono text-[#22C55E] text-right whitespace-nowrap">{formatCents(inv.balanceCents)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {kycStatus && (
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
-                            inv.accountStatus === 'active'
+                            kycStatus === 'approved'
                               ? 'bg-[#22C55E]/10 text-[#22C55E]'
-                              : inv.accountStatus
+                              : kycStatus === 'pending'
                               ? 'bg-amber-500/10 text-amber-400'
-                              : 'bg-[#2B393F] text-[#7F8C86]'
+                              : 'bg-rose-500/10 text-rose-400'
                           }`}>
-                            {inv.accountStatus ? String(inv.accountStatus).toUpperCase() : 'NO ACCOUNT'}
+                            KYC: {kycStatus}
                           </span>
-                        </div>
+                        )}
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
+                          inv.accountStatus === 'active'
+                            ? 'bg-[#22C55E]/10 text-[#22C55E]'
+                            : inv.accountStatus
+                            ? 'bg-amber-500/10 text-amber-400'
+                            : 'bg-[#2B393F] text-[#7F8C86]'
+                        }`}>
+                          {inv.accountStatus ? String(inv.accountStatus).toUpperCase() : 'NO ACCOUNT'}
+                        </span>
                       </div>
-                    </div>
-                    <Icon
-                      icon="solar:alt-arrow-right-bold"
-                      className={`w-4 h-4 text-[#93A09A] transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
-                    />
-                  </button>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Icon
+                        icon="solar:alt-arrow-down-bold"
+                        className={`w-4 h-4 text-[#93A09A] transition-transform inline-block ${isExpanded ? 'rotate-180' : ''}`}
+                      />
+                    </td>
+                  </tr>
 
                   {isExpanded && (
-                    <div className="border-t border-[#2B393F] p-5 space-y-4">
+                    <tr className="border-b border-[#2B393F] bg-[#0D1215]/60">
+                      <td colSpan={5} className="px-4 py-4">
+                    <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="bg-[#0D1215] border border-[#2B393F] rounded-xl p-4">
                           <p className="text-[10px] uppercase font-mono text-[#93A09A] mb-1">Principal</p>
@@ -319,13 +332,13 @@ export default function AdminInvestorsPage() {
                           <Icon icon="solar:wallet-bold" className="w-3.5 h-3.5" />
                           Add Balance
                         </button>
-                        <button
-                          onClick={() => router.push(`/admin/performance/${inv.id}`)}
+                        <Link
+                          href="/admin/performance"
                           className="flex items-center gap-1.5 text-[10px] font-mono px-3 py-1.5 rounded-lg bg-[#F59E0B]/10 text-[#F59E0B] border border-[#F59E0B]/30 hover:bg-[#F59E0B]/20 transition-colors"
                         >
                           <Icon icon="solar:graph-up-bold" className="w-3.5 h-3.5" />
-                          Add ROI
-                        </button>
+                          Add ROI via Daily ROI Entry
+                        </Link>
                         <button
                           onClick={() => {
                             setPlanInvestorId(inv.id);
@@ -390,10 +403,35 @@ export default function AdminInvestorsPage() {
                         {timeline.length === 0 ? <p className="text-[10px] text-[#7F8C86]">No account activity recorded.</p> : <div className="space-y-2">{timeline.slice(0, 12).map((event, index) => <div key={`${event.type}-${event.date}-${index}`} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 rounded-xl bg-[#0D1215] border border-[#2B393F] p-3 text-[10px] font-mono"><span className="w-2 h-2 rounded-full bg-[#22C55E] shrink-0" /><span className="text-white font-semibold">{event.type}</span><span className="capitalize text-[#93A09A]">{event.status}</span>{event.amount !== null && <span className={event.amount >= 0 ? 'text-[#22C55E]' : 'text-rose-300'}>{event.amount >= 0 ? '+' : ''}{formatCents(event.amount)}</span>}<span className="text-[#7F8C86] sm:ml-auto">{new Date(event.date).toLocaleString()}</span>{event.note && <span className="text-[#7F8C86] truncate max-w-full sm:max-w-[240px]" title={event.note}>{event.note}</span>}</div>)}</div>}
                       </div>
                     </div>
+                      </td>
+                    </tr>
                   )}
-                </div>
+                </React.Fragment>
               );
             })}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-[#2B393F]">
+              <p className="text-[10px] font-mono text-[#7F8C86]">Showing {rangeStart}–{rangeEnd} of {filtered.length} investors</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(safePage - 1)}
+                  disabled={safePage === 0}
+                  className="px-3 py-1.5 rounded-lg border border-[#2B393F] text-[10px] font-mono text-[#93A09A] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  Prev
+                </button>
+                <span className="text-[10px] font-mono text-[#7F8C86]">Page {safePage + 1} / {pageCount}</span>
+                <button
+                  onClick={() => setPage(safePage + 1)}
+                  disabled={safePage >= pageCount - 1}
+                  className="px-3 py-1.5 rounded-lg border border-[#2B393F] text-[10px] font-mono text-[#93A09A] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </main>
