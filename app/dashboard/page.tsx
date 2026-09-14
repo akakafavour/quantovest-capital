@@ -29,6 +29,7 @@ interface Profile {
   kycStatus: string;
   onboardingCompleted: boolean;
   tourCompleted: boolean;
+  accountStatus?: string | null;
 }
 
 interface DepositRow {
@@ -148,6 +149,7 @@ export default function InvestorDashboard() {
     id: '', name: '', email: '', avatar: null, role: 'investor', balance: 0,
     totalInvested: 0, totalProfit: 0, dailyRoiPercent: 0, allTimeRoiPercent: 0,
     plan: 'Starter', kycStatus: 'pending', onboardingCompleted: false, tourCompleted: false,
+    accountStatus: null,
   });
   const [deposits, setDeposits] = useState<DepositRow[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRow[]>([]);
@@ -335,6 +337,24 @@ export default function InvestorDashboard() {
             >
               Upload Documents Now
             </button>
+          </div>
+        )}
+
+        {/* Account Closure Banner */}
+        {profile.accountStatus === 'closing' && (
+          <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <Icon icon="solar:info-circle-bold" className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
+              <p className="text-[10px] sm:text-xs text-rose-200">
+                <strong>Account closure requested:</strong> your close-account withdrawal is pending admin review. Deposits, swaps and new withdrawals are paused until it is resolved.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/withdraw"
+              className="w-full sm:w-auto px-5 py-2 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-200 text-xs font-semibold hover:bg-rose-500/30 transition-colors whitespace-nowrap shrink-0 text-center"
+            >
+              View Request
+            </Link>
           </div>
         )}
 
