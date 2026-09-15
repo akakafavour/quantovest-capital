@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import InvestorSidebar from '@/components/InvestorSidebar';
-import { verifyTOTP } from '@/lib/totp';
 import { Icon } from '@iconify/react';
 import Link from 'next/link';
 
@@ -10,7 +9,6 @@ type UserProfile = {
   balance: number;
   plan: string;
   twoFactorEnabled: boolean;
-  twoFactorSecret: string;
   payoutDetails: { cryptoAddress: string; cryptoNetwork: string; bankName: string; bankAccountName: string; bankAccountNumber: string };
 };
 
@@ -40,7 +38,6 @@ export default function WithdrawPage() {
 
           plan: data.plan ?? '',
           twoFactorEnabled: data.twoFactorEnabled ?? false,
-          twoFactorSecret: data.twoFactorSecret ?? '',
           payoutDetails: data.payoutDetails ?? { cryptoAddress: '', cryptoNetwork: '', bankName: '', bankAccountName: '', bankAccountNumber: '' },
         });
       }
@@ -75,10 +72,6 @@ export default function WithdrawPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (profile?.twoFactorEnabled && !await verifyTOTP(profile.twoFactorSecret, otpCode)) {
-      setMessage('Invalid 2FA code. Please check your authenticator app.');
-      return;
-    }
     setSubmitting(true); setMessage('');
 
     const destination = getPayoutDestination();
@@ -91,10 +84,13 @@ export default function WithdrawPage() {
     const res = await fetch('/api/withdrawals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      // 2FA codes are verified server-side; the TOTP secret never leaves the server.
       body: JSON.stringify({
         amountCents: Math.round(amount * 100),
         destinationType,
         destination,
+        ...(profile?.twoFactorEnabled ? { totpCode: otpCode } : {}),
+        ...(closeAccountMode ? { closeAccount: true } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));

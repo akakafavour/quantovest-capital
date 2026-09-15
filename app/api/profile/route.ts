@@ -3,7 +3,6 @@ import { eq, and, isNull } from "drizzle-orm";
 import { getCurrentIdentity } from "@/lib/supabase/identity";
 import { getDb } from "@/lib/db";
 import { users, recoveryCodes } from "@/db/schema";
-import { generateRecoveryCodes } from "@/lib/recovery-codes";
 import { databaseUnavailable } from "@/lib/api-errors";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +17,6 @@ export async function GET() {
       name: users.name,
       image: users.image,
       twoFactorEnabled: users.twoFactorEnabled,
-      twoFactorSecret: users.twoFactorSecret,
       payoutDetails: users.payoutDetails,
       notificationPrefs: users.notificationPrefs,
       onboardingCompleted: users.onboardingCompleted,
@@ -49,8 +47,6 @@ export async function PATCH(request: Request) {
     const body = await request.json().catch(() => null) as {
       name?: string;
       image?: string;
-      twoFactorEnabled?: boolean;
-      twoFactorSecret?: string;
       payoutDetails?: Record<string, string>;
       notificationPrefs?: Record<string, boolean>;
       onboardingCompleted?: boolean;
@@ -62,8 +58,7 @@ export async function PATCH(request: Request) {
     const updates: Record<string, unknown> = {};
     if (body.name?.trim()) updates.name = body.name.trim();
     if (body.image?.trim()) updates.image = body.image.trim();
-    if (body.twoFactorEnabled !== undefined) updates.twoFactorEnabled = body.twoFactorEnabled;
-    if (body.twoFactorSecret !== undefined) updates.twoFactorSecret = body.twoFactorSecret;
+    // NOTE: 2FA is managed exclusively via /api/auth/2fa (verified enable/disable).
     if (body.payoutDetails) updates.payoutDetails = JSON.stringify(body.payoutDetails);
     if (body.notificationPrefs) updates.notificationPrefs = JSON.stringify(body.notificationPrefs);
     if (body.onboardingCompleted !== undefined) updates.onboardingCompleted = body.onboardingCompleted;
@@ -82,14 +77,7 @@ export async function PATCH(request: Request) {
 
     await db.update(users).set(updates).where(eq(users.id, actor.id));
 
-    let recoveryCodesList: string[] | undefined;
-    if (body.twoFactorEnabled === true) {
-      try {
-        recoveryCodesList = await generateRecoveryCodes(actor.id);
-      } catch { /* recovery codes generation failed — non-fatal */ }
-    }
-
-    return NextResponse.json({ updated: true, recoveryCodes: recoveryCodesList });
+    return NextResponse.json({ updated: true });
   } catch (err) {
     return databaseUnavailable("profile PATCH", err);
   }

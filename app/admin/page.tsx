@@ -48,9 +48,15 @@ export default function AdminDashboard() {
   const [msgTitle, setMsgTitle] = useState('');
   const [msgBody, setMsgBody] = useState('');
   const [msgAudience, setMsgAudience] = useState<'all' | 'plan'>('all');
+  const [planNames, setPlanNames] = useState<string[]>([]);
+  const [selectedPlans, setSelectedPlans] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  function togglePlan(name: string) {
+    setSelectedPlans(prev => (prev.includes(name) ? prev.filter(p => p !== name) : [...prev, name]));
+  }
 
   useEffect(() => {
     async function fetchData() {
@@ -69,7 +75,20 @@ export default function AdminDashboard() {
         setLoading(false);
       }
     }
+    async function fetchPlans() {
+      try {
+        const res = await fetch('/api/plans', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : data.plans ?? [];
+          setPlanNames(list.map((p: { name: string }) => p.name).filter(Boolean));
+        }
+      } catch {
+        /* plan picker falls back to the three default tiers */
+      }
+    }
     fetchData();
+    fetchPlans();
   }, []);
 
   return (
@@ -79,9 +98,12 @@ export default function AdminDashboard() {
       <main className="flex-1 p-4 sm:p-8 space-y-8 overflow-y-auto pb-24 md:pb-8">
         {/* Header */}
         <div className="border-b border-[#2B393F] pb-6 space-y-1">
-          <div className="flex items-center gap-2 text-xs text-[#22C55E] font-mono">
-            <span className="w-2 h-2 rounded-full bg-[#22C55E]"></span>
-            STAFF ADMIN CONSOLE
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#22C55E]/30 bg-[#22C55E]/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-[#22C55E] font-mono w-fit">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22C55E] opacity-60"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#22C55E]"></span>
+            </span>
+            Staff Admin Console
           </div>
           <h1 className="text-2xl font-normal text-[#E8EFEB]">Trading Firm Control Center</h1>
           <p className="text-xs text-[#93A09A]">Publish daily strategy returns, approve deposits, process withdrawals, and verify client KYC.</p>
@@ -196,6 +218,27 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          {msgAudience === 'plan' && (
+            <div className="flex gap-2 flex-wrap">
+              {(planNames.length > 0 ? planNames : ['Starter', 'Growth', 'Elite']).map(name => {
+                const active = selectedPlans.includes(name);
+                return (
+                  <button
+                    key={name}
+                    onClick={() => togglePlan(name)}
+                    className={`rounded-full px-4 py-2 text-[10px] font-mono border transition-colors ${
+                      active
+                        ? 'border-[#d6a85c]/60 bg-[#d6a85c]/15 text-[#d6a85c]'
+                        : 'border-[#2B393F] bg-[#0D1215] text-[#93A09A] hover:text-white'
+                    }`}
+                  >
+                    {active ? '✓ ' : ''}{name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <textarea
             value={msgBody}
             onChange={e => setMsgBody(e.target.value)}
@@ -211,7 +254,7 @@ export default function AdminDashboard() {
               </p>
             )}
             <button
-              disabled={!msgTitle.trim() || !msgBody.trim() || sending}
+              disabled={!msgTitle.trim() || !msgBody.trim() || sending || (msgAudience === 'plan' && selectedPlans.length === 0)}
               onClick={async () => {
                 setSending(true);
                 setSendResult(null);
@@ -223,6 +266,7 @@ export default function AdminDashboard() {
                       title: msgTitle.trim(),
                       body: msgBody.trim(),
                       audience: msgAudience,
+                      ...(msgAudience === 'plan' ? { plans: selectedPlans } : {}),
                     }),
                   });
                   const data = await res.json();
@@ -230,6 +274,7 @@ export default function AdminDashboard() {
                     setSendResult(`Sent to ${data.delivered ?? '?'} investors`);
                     setMsgTitle('');
                     setMsgBody('');
+                    setSelectedPlans([]);
                   } else {
                     setSendResult(data.error || 'Failed to send');
                   }
@@ -240,7 +285,7 @@ export default function AdminDashboard() {
               }}
               className="ml-auto px-5 py-2.5 rounded-full bg-[#d6a85c] text-[#0D1215] text-[11px] font-semibold hover:bg-[#c49a50] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {sending ? 'Sending...' : 'Send to All'}
+              {sending ? 'Sending...' : msgAudience === 'plan' ? `Send to ${selectedPlans.length > 0 ? selectedPlans.join(', ') : 'Plan'}` : 'Send to All'}
             </button>
           </div>
         </div>

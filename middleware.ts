@@ -122,6 +122,16 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
     if (isAdmin && !pathname.startsWith('/admin')) {
+      // Identity-scoped self-service APIs are safe for admins too (notification
+      // bell, sidebar profile). Everything else still redirects to /admin.
+      if (
+        pathname === '/api/notifications' ||
+        pathname.startsWith('/api/notifications/') ||
+        pathname === '/api/investor-profile' ||
+        pathname.startsWith('/api/investor-profile/')
+      ) {
+        return response;
+      }
       return NextResponse.redirect(new URL('/admin', request.url));
     }
     return response;

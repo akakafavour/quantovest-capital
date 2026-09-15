@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { getCurrentIdentity } from '@/lib/supabase/identity';
 import { notifyAdmins } from '@/lib/notifications';
 import { getDb } from '@/lib/db';
-import { deposits, users } from '@/db/schema';
+import { deposits, investorAccounts, users } from '@/db/schema';
 import { sendDepositSubmitted } from '@/lib/email';
 import { databaseUnavailable } from '@/lib/api-errors';
 
@@ -30,6 +30,8 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null) as { amountCents?: number; method?: string; proofPath?: string; planId?: number | null } | null;
     if (!body?.amountCents || !Number.isInteger(body.amountCents) || body.amountCents < 5000 || !['usdt-trc20', 'btc'].includes(body.method || '') || !body.proofPath?.trim()) return NextResponse.json({ error: 'Minimum deposit is $50. Select a valid cryptocurrency and upload proof.' }, { status: 400 });
     if (!body.proofPath.startsWith(`deposit-proof/${actor.id}/`)) return NextResponse.json({ error: 'Deposit proof is invalid or expired. Please upload it again.' }, { status: 400 });
+    const [account] = await db.select({ status: investorAccounts.status }).from(investorAccounts).where(eq(investorAccounts.investorId, actor.id)).limit(1);
+    if (account && account.status !== 'active') return NextResponse.json({ error: 'Your account is closing. New deposits are disabled.' }, { status: 400 });
     const id = crypto.randomUUID();
     await db.insert(deposits).values({ id, investorId: actor.id, amountCents: body.amountCents, method: body.method!, proofPath: body.proofPath.trim(), planId: body.planId ?? null, status: 'pending' });
     try {

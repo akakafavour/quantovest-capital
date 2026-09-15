@@ -33,12 +33,16 @@ export default function NotificationCenter({ align = 'right' }: { align?: 'left'
   const [tab, setTab] = useState<Tab>('all');
 
   async function load() {
-    const response = await fetch('/api/notifications', { cache: 'no-store' });
-    if (response.ok) {
-      const data = await response.json();
-      setItems(data.items ?? []);
-      setUnread(data.unreadCount ?? 0);
-    }
+    try {
+      const response = await fetch('/api/notifications', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json().catch(() => null);
+        if (data) {
+          setItems(data.items ?? []);
+          setUnread(data.unreadCount ?? 0);
+        }
+      }
+    } catch { /* bell stays in empty state rather than throwing to console */ }
   }
 
   useEffect(() => {
@@ -62,11 +66,13 @@ export default function NotificationCenter({ align = 'right' }: { align?: 'left'
   }, [items]);
 
   async function mark(id?: number) {
-    await fetch('/api/notifications', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(id ? { id } : { all: true }),
-    });
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(id ? { id } : { all: true }),
+      });
+    } catch { /* ignore — list refresh below still runs */ }
     await load();
   }
 

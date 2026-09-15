@@ -81,7 +81,8 @@ export async function PATCH(request: Request) {
         await tx.update(investorAccounts).set({
           principalCents: newPrincipalCents,
           balanceCents: existingAccounts[0].balanceCents + deposit.amountCents,
-          status: 'active',
+          // Never resurrect an account mid-closure; its pending close request decides.
+          status: existingAccounts[0].status === 'closing' ? 'closing' : 'active',
           updatedAt: new Date(),
         }).where(eq(investorAccounts.id, existingAccounts[0].id));
       } else {

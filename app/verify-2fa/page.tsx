@@ -12,7 +12,6 @@ export default function Verify2FAPage() {
   const router = useRouter();
   const supabase = createClient();
   const [userId, setUserId] = useState('');
-  const [secret, setSecret] = useState('');
   const [code, setCode] = useState('');
   const [mode, setMode] = useState<'totp' | 'recovery'>('totp');
   const [message, setMessage] = useState('');
@@ -40,7 +39,6 @@ export default function Verify2FAPage() {
             router.replace('/dashboard');
             return;
           }
-          setSecret(data.twoFactorSecret ?? '');
         }
       } catch { /* ignore */ }
       if (!cancelled) setChecking(false);
