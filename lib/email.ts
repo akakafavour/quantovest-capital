@@ -2,10 +2,10 @@
  * Email System for Quantovest Capital
  * 
  * Architecture:
- * 1. Event helper â€” receives a business event (e.g., deposit_approved)
- * 2. Template renderer â€” loads the correct template with server-derived variables
- * 3. Outbox â€” stores pending emails for retry
- * 4. Provider adapter â€” sends via Resend/SendGrid/SES
+ * 1. Event helper GÇö receives a business event (e.g., deposit_approved)
+ * 2. Template renderer GÇö loads the correct template with server-derived variables
+ * 3. Outbox GÇö stores pending emails for retry
+ * 4. Provider adapter GÇö sends via Resend/SendGrid/SES
  * 
  * To activate: set ZOHO_SMTP_USER, ZOHO_SMTP_PASS and EMAIL_FROM in .env.local
  * Without these, emails are logged to console but not sent.
@@ -14,7 +14,7 @@
 const APP_URL = process.env.APP_PUBLIC_URL || 'http://localhost:3000';
 
 if (!process.env.APP_PUBLIC_URL) {
-  console.warn('[EMAIL] APP_PUBLIC_URL is not set â€” email template links will fall back to http://localhost:3000.');
+  console.warn('[EMAIL] APP_PUBLIC_URL is not set GÇö email template links will fall back to http://localhost:3000.');
 }
 
 function esc(value: string | null | undefined): string {
@@ -25,7 +25,7 @@ function esc(value: string | null | undefined): string {
     .replace(/"/g, '&quot;');
 }
 
-// â”€â”€â”€ Email Templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// GöÇGöÇGöÇ Email Templates GöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇ
 
 export interface EmailTemplate {
   subject: string;
@@ -94,8 +94,8 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
     <div class="header"><h1>Quantovest Capital</h1></div>
     <div class="body">${content}</div>
     <div class="footer">
-      <p>Quantovest Capital â€” Your Capital. Their Expertise.</p>
-      <p><a href="${APP_URL}/dashboard">View Dashboard</a> Â· <a href="${APP_URL}/legal/terms">Terms</a> Â· <a href="${APP_URL}/legal/privacy">Privacy</a></p>
+      <p>Quantovest Capital GÇö Your Capital. Their Expertise.</p>
+      <p><a href="${APP_URL}/dashboard">View Dashboard</a> -+ <a href="${APP_URL}/legal/terms">Terms</a> -+ <a href="${APP_URL}/legal/privacy">Privacy</a></p>
       <p style="margin-top: 12px; font-size: 11px; color: #d1d5db;">
         Risk Warning: Trading involves substantial risk of loss. Past performance is not indicative of future results.
         You should not invest more than you can afford to lose. Please read our full risk disclosure.
@@ -104,7 +104,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
   </div>
 </body>
 </html>`,
-    text: `${title}\n\nHello ${esc(data.investorName)},\n\n${content.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()}\n\nView your dashboard: ${APP_URL}/dashboard\n\nQuantovest Capital â€” Your Capital. Their Expertise.`,
+    text: `${title}\n\nHello ${esc(data.investorName)},\n\n${content.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()}\n\nView your dashboard: ${APP_URL}/dashboard\n\nQuantovest Capital GÇö Your Capital. Their Expertise.`,
   });
 
   switch (name) {
@@ -200,7 +200,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <p>Hello ${esc(data.investorName)},</p>
         <p>Your identity verification has been approved. You now have full access to all platform features.</p>
         <div style="text-align:center;padding:20px;">
-          <span style="display:inline-block;background:#f0fdf4;color:#16a34a;font-weight:700;font-size:16px;padding:8px 24px;border-radius:100px;">âœ“ Verified</span>
+          <span style="display:inline-block;background:#f0fdf4;color:#16a34a;font-weight:700;font-size:16px;padding:8px 24px;border-radius:100px;">G£ô Verified</span>
         </div>
         <a href="${APP_URL}/dashboard" class="cta">Go to Dashboard</a>
       `);
@@ -291,7 +291,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
   }
 }
 
-// â”€â”€â”€ Email Sender (Zoho SMTP) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// GöÇGöÇGöÇ Email Sender (Zoho SMTP) GöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇ
 
 import tls from 'tls';
 import net from 'net';
@@ -316,7 +316,7 @@ function smtpCommand(socket: net.Socket, command: string): Promise<string> {
     };
     socket.on('data', onData);
     socket.write(`${command}\r\n`);
-    setTimeout(() => { socket.off('data', onData); reject(new Error('SMTP command timed out.')); }, 5000);
+    setTimeout(() => { socket.off('data', onData); reject(new Error('SMTP command timed out.')); }, 15000);
   });
 }
 
@@ -387,7 +387,7 @@ async function sendViaZoho(
       }
     });
     socket.on('error', (err) => reject(err));
-    socket.setTimeout(5000, () => { socket.destroy(); reject(new Error('SMTP connection timed out.')); });
+    socket.setTimeout(20000, () => { socket.destroy(); reject(new Error('SMTP connection timed out.')); });
   });
 }
 
@@ -423,7 +423,7 @@ export async function sendEmail(
   }
 }
 
-// â”€â”€â”€ Convenience Functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// GöÇGöÇGöÇ Convenience Functions GöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇ
 
 export async function sendDepositSubmitted(to: string, name: string, amount: string) {
   return sendEmail(to, 'deposit_submitted', { investorName: name, amount });

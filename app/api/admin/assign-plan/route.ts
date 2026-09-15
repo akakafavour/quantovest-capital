@@ -31,10 +31,12 @@ export async function POST(request: Request) {
       const targetPlan = await tx.select().from(plans).where(eq(plans.name, body.planName!)).limit(1);
       if (!targetPlan[0]) throw new PlanAssignmentError('Plan not found');
 
+      const creditCents = targetPlan[0].minimumDepositCents;
+
       const existing = await tx.select().from(investorAccounts).where(eq(investorAccounts.investorId, body.investorId!)).limit(1);
       const principalCents = existing[0]?.principalCents ?? 0;
 
-      if (principalCents < targetPlan[0].minimumDepositCents) {
+      if (existing[0] && principalCents < targetPlan[0].minimumDepositCents) {
         throw new PlanAssignmentError(
           `This investor's total deposit of $${(principalCents / 100).toFixed(2)} is below the ${targetPlan[0].name} plan's minimum of $${(targetPlan[0].minimumDepositCents / 100).toFixed(2)}. No plan is granted until the minimum deposit is reached.`
         );
@@ -43,6 +45,8 @@ export async function POST(request: Request) {
       if (existing[0]) {
         await tx.update(investorAccounts).set({
           planId: targetPlan[0].id,
+          principalCents: existing[0].principalCents + creditCents,
+          balanceCents: existing[0].balanceCents + creditCents,
           status: 'active',
           updatedAt: new Date(),
         }).where(eq(investorAccounts.id, existing[0].id));
@@ -51,8 +55,8 @@ export async function POST(request: Request) {
           id: crypto.randomUUID(),
           investorId: body.investorId!,
           planId: targetPlan[0].id,
-          principalCents,
-          balanceCents: principalCents,
+          principalCents: creditCents,
+          balanceCents: creditCents,
           status: 'active',
         });
       }
@@ -60,15 +64,16 @@ export async function POST(request: Request) {
       await tx.insert(portfolioLedger).values({
         investorId: body.investorId!,
         type: 'plan_upgrade',
-        amountCents: 0,
+        amountCents: creditCents,
         referenceId: `plan-assign-${crypto.randomUUID()}`,
-        description: `Account assigned to the ${targetPlan[0].name} plan`,
+        description: `Account upgraded to the ${targetPlan[0].name} plan`,
       });
 
-      return { success: true, plan: body.planName!, investorId: body.investorId! };
+      return { success: true, plan: body.planName!, creditedCents: creditCents, investorId: body.investorId! };
     });
 
-    await notifyUser(result.investorId, 'plan_updated', 'Plan assigned', `Your account has been assigned the ${result.plan} plan.`);
+    const dollars = (result.creditedCents / 100).toFixed(2);
+    await notifyUser(result.investorId, 'plan_updated', 'Plan assigned', `Your account has been upgraded to the ${result.plan} plan and $${dollars} has been credited to your balance.`);
     try {
       const investor = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, result.investorId)).limit(1);
       if (investor[0]?.email) sendPlanUpdated(investor[0].email, investor[0].name || 'Investor', 'Previous plan', result.plan);
