@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import InvestorSidebar from '@/components/InvestorSidebar';
-import { generateSecret, getQRCodeUrl } from '@/lib/totp';
+import { generateSecret } from '@/lib/totp';
+import { TotpQr } from '@/components/totp-qr';
 import { Icon } from '@iconify/react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -132,15 +133,32 @@ export default function SettingsPage() {
 
   async function saveProfile(event: React.FormEvent) {
     event.preventDefault(); setSaving(true); setMessage('');
+    const trimmedName = name.trim();
+    if (trimmedName.length < 2) {
+      setMessage('Enter your full name (at least 2 characters).');
+      setSaving(false);
+      return;
+    }
     let imagePath = '';
     if (image) {
+      const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowed.includes(image.type)) {
+        setMessage('Avatar must be a JPG, PNG, or WebP image.');
+        setSaving(false);
+        return;
+      }
+      if (image.size > 5 * 1024 * 1024) {
+        setMessage('Avatar must be 5 MB or smaller.');
+        setSaving(false);
+        return;
+      }
       const form = new FormData(); form.append('file', image); form.append('purpose', 'avatar');
       const upload = await fetch('/api/uploads', { method: 'POST', body: form });
       const uploadData = await upload.json().catch(() => ({}));
       if (!upload.ok) { setMessage(uploadData.error ?? 'Avatar upload failed.'); setSaving(false); return; }
       imagePath = `${uploadData.bucket}/${uploadData.path}`;
     }
-    const response = await fetch('/api/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, image: imagePath || undefined }) });
+    const response = await fetch('/api/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: trimmedName, image: imagePath || undefined }) });
     const data = await response.json().catch(() => ({}));
     setMessage(response.ok ? 'Profile saved.' : data.error ?? 'Profile save failed.');
     setSaving(false);
@@ -154,6 +172,10 @@ export default function SettingsPage() {
   }
 
   async function handleVerify2FA() {
+    if (!/^\d{6}$/.test(verifyCode.trim())) {
+      setMessage('Enter the 6-digit code from your authenticator app.');
+      return;
+    }
     setSaving(true);
     const res = await fetch('/api/auth/2fa', {
       method: 'POST',
@@ -176,6 +198,10 @@ export default function SettingsPage() {
   }
 
   async function handleDisable2FA() {
+    if (!/^\d{6}$/.test(disableCode.trim())) {
+      setMessage('Enter the 6-digit code from your authenticator app.');
+      return;
+    }
     setSaving(true);
     const res = await fetch('/api/auth/2fa', {
       method: 'POST',
@@ -250,14 +276,14 @@ export default function SettingsPage() {
         </div>
 
         {message && (
-          <div role="status" className="rounded-xl border border-[#22C55E]/50 bg-[#22C55E]/10 p-4 text-xs text-[#86EFAC]">{message}</div>
+          <div role="status" aria-live="polite" className="rounded-xl border border-[#22C55E]/50 bg-[#22C55E]/10 p-4 text-xs text-[#86EFAC]">{message}</div>
         )}
 
         <div className="max-w-2xl bg-[#141C1F] border border-[#263437] rounded-2xl p-6 sm:p-8 space-y-6">
           {/* Profile Section */}
           <form onSubmit={saveProfile} className="flex flex-col gap-4 pb-6 border-b border-[#263437]">
             <div className="flex items-center gap-3 sm:gap-4">
-              <img src={profile.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.name}`} alt={profile.name} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-[#22C55E]/40 object-cover shrink-0" />
+              <img src={profile.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.name || profile.email || 'investor')}`} alt={profile.name || 'Investor avatar'} width={64} height={64} onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.email || 'investor')}`; }} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-[#22C55E]/40 object-cover shrink-0" />
               <div className="min-w-0">
                 <h3 className="text-base sm:text-lg font-medium truncate">{profile.name}</h3>
                 <p className="text-xs text-[#93A09A] font-mono truncate">{profile.email}</p>
@@ -265,12 +291,12 @@ export default function SettingsPage() {
               </div>
             </div>
             <label className="text-xs text-[#93A09A]">Display name
-              <input value={name} onChange={event => setName(event.target.value)} className="mt-1 w-full rounded-xl border border-[#263437] bg-[#0A0F11] px-4 py-3 text-sm text-white" />
+              <input value={name} onChange={event => setName(event.target.value)} required minLength={2} maxLength={80} autoComplete="name" className="mt-1 min-h-11 w-full rounded-xl border border-[#263437] bg-[#0A0F11] px-4 py-3 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]" />
             </label>
             <label className="text-xs text-[#93A09A]">Avatar image
-              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={event => setImage(event.target.files?.[0] ?? null)} className="mt-1 w-full text-xs" />
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={event => setImage(event.target.files?.[0] ?? null)} className="mt-1 min-h-11 w-full text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] rounded" />
             </label>
-            <button disabled={saving} className="self-start rounded-full bg-[#22C55E] px-5 py-3 text-xs font-semibold text-[#07110B] disabled:opacity-40">
+            <button disabled={saving} className="min-h-11 self-start rounded-full bg-[#22C55E] px-5 py-3 text-xs font-semibold text-[#07110B] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0F11]">
               {saving ? 'Saving\u2026' : 'Save Profile'}
             </button>
           </form>
@@ -383,18 +409,18 @@ export default function SettingsPage() {
                 </button>
               </div>
               <div className="flex justify-center">
-                <img src={getQRCodeUrl(profile.email, pendingSecret)} alt="2FA QR Code" className="w-48 h-48 rounded-xl bg-white p-2" />
+                {/* Rendered client-side: the TOTP secret never leaves the browser (no third-party QR API). */}
+                <TotpQr email={profile.email} secret={pendingSecret} />
               </div>
               <div className="space-y-2">
-                <p className="text-[10px] text-[#93A09A]">Scan this QR code with Google Authenticator, then enter the 6-digit code below.</p>
-                <p className="text-[10px] text-[#93A09A] font-mono break-all">Manual key: {pendingSecret}</p>
+                <p className="text-[10px] text-[#93A09A]">Add the key above to Google Authenticator (or any TOTP app), then enter the 6-digit code below.</p>
               </div>
               <div>
                 <label className="text-xs text-[#93A09A] block">Verification Code
-                  <input value={verifyCode} onChange={e => setVerifyCode(e.target.value)} maxLength={6} placeholder="000000" className="mt-1 w-full rounded-xl border border-[#263437] bg-[#0A0F11] px-4 py-3 text-sm text-white font-mono text-center tracking-[0.3em]" />
+                  <input value={verifyCode} onChange={e => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} placeholder="000000" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" aria-label="Authenticator verification code" className="mt-1 min-h-11 w-full rounded-xl border border-[#263437] bg-[#0A0F11] px-4 py-3 text-sm text-white font-mono text-center tracking-[0.3em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]" />
                 </label>
               </div>
-              <button onClick={handleVerify2FA} disabled={verifyCode.length !== 6} className="w-full rounded-full bg-[#22C55E] px-5 py-3 text-xs font-semibold text-[#07110B] disabled:opacity-40">
+              <button onClick={handleVerify2FA} disabled={verifyCode.length !== 6} className="min-h-11 w-full rounded-full bg-[#22C55E] px-5 py-3 text-xs font-semibold text-[#07110B] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0F11]">
                 Verify & Enable
               </button>
             </div>
@@ -413,9 +439,9 @@ export default function SettingsPage() {
               </div>
               <p className="text-xs text-[#93A09A]">Enter a valid TOTP code from your authenticator app to confirm disabling 2FA.</p>
               <label className="text-xs text-[#93A09A] block">TOTP Code
-                <input value={disableCode} onChange={e => setDisableCode(e.target.value)} maxLength={6} placeholder="000000" className="mt-1 w-full rounded-xl border border-[#263437] bg-[#0A0F11] px-4 py-3 text-sm text-white font-mono text-center tracking-[0.3em]" />
+                <input value={disableCode} onChange={e => setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} placeholder="000000" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" aria-label="Authenticator code to disable 2FA" className="mt-1 min-h-11 w-full rounded-xl border border-[#263437] bg-[#0A0F11] px-4 py-3 text-sm text-white font-mono text-center tracking-[0.3em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]" />
               </label>
-              <button onClick={handleDisable2FA} disabled={disableCode.length !== 6} className="w-full rounded-full bg-rose-500/20 border border-rose-500/40 px-5 py-3 text-xs font-semibold text-rose-300 disabled:opacity-40">
+              <button onClick={handleDisable2FA} disabled={disableCode.length !== 6} className="min-h-11 w-full rounded-full bg-rose-500/20 border border-rose-500/40 px-5 py-3 text-xs font-semibold text-rose-300 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400">
                 Confirm Disable
               </button>
             </div>

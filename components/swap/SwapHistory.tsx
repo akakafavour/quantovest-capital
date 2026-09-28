@@ -25,21 +25,23 @@ export default function SwapHistory({ refreshKey = 0 }: SwapHistoryProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       try {
         const res = await fetch('/api/swap/history');
-        if (res.ok) setSwaps(await res.json());
-      } catch { /* ignore */ }
-      setLoading(false);
+        if (!cancelled && res.ok) setSwaps(await res.json());
+      } catch { /* ignore — empty state covers failure */ }
+      if (!cancelled) setLoading(false);
     }
     void load();
+    return () => { cancelled = true; };
   }, [refreshKey]);
 
   if (loading) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-3" role="status" aria-label="Loading swap history">
         {[1, 2, 3].map(i => (
-          <div key={i} className="h-16 bg-[#141C1F] border border-[#263437] rounded-xl animate-pulse" />
+          <div key={`swap-skeleton-${i}`} className="h-16 bg-[#141C1F] border border-[#263437] rounded-xl motion-safe:animate-pulse" />
         ))}
       </div>
     );
@@ -47,8 +49,8 @@ export default function SwapHistory({ refreshKey = 0 }: SwapHistoryProps) {
 
   if (swaps.length === 0) {
     return (
-      <div className="p-8 text-center">
-        <Icon icon="solar:arrow-right-left-bold" className="w-10 h-10 text-[#263437] mx-auto mb-3" />
+      <div className="p-8 text-center" role="status">
+        <Icon icon="solar:arrow-right-left-bold" className="w-10 h-10 text-[#263437] mx-auto mb-3" aria-hidden="true" />
         <p className="text-xs text-[#93A09A]">No swap history yet</p>
       </div>
     );

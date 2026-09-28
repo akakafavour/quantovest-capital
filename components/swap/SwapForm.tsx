@@ -41,7 +41,15 @@ export default function SwapForm({ onPreview }: SwapFormProps) {
   }, [fromAsset]);
 
   async function handleGetQuote() {
-    if (!amount || parseFloat(amount) <= 0) return;
+    const parsed = parseFloat(amount);
+    if (!amount || !Number.isFinite(parsed) || parsed <= 0) {
+      setError('Enter an amount greater than zero.');
+      return;
+    }
+    if (fromAsset === toAsset) {
+      setError('Choose two different assets to swap.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -70,7 +78,8 @@ export default function SwapForm({ onPreview }: SwapFormProps) {
           <select
             value={fromAsset}
             onChange={e => setFromAsset(e.target.value)}
-            className="rounded-xl border border-[#263437] bg-[#0A0F11] px-3 py-3 text-sm text-white font-mono min-w-[100px]"
+            aria-label="Pay asset"
+            className="min-h-11 rounded-xl border border-[#263437] bg-[#0A0F11] px-3 py-3 text-sm text-white font-mono min-w-[100px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]"
           >
             {ASSETS.map(a => (
               <option key={a.symbol} value={a.symbol}>{a.symbol}</option>
@@ -83,7 +92,9 @@ export default function SwapForm({ onPreview }: SwapFormProps) {
             placeholder="0.00"
             min="0"
             step="any"
-            className="flex-1 rounded-xl border border-[#263437] bg-[#0A0F11] px-4 py-3 text-sm text-white font-mono text-right"
+            required
+            aria-label="Pay amount"
+            className="min-h-11 flex-1 rounded-xl border border-[#263437] bg-[#0A0F11] px-4 py-3 text-sm text-white font-mono text-right focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]"
           />
         </div>
       </div>
@@ -91,10 +102,12 @@ export default function SwapForm({ onPreview }: SwapFormProps) {
       {/* Swap Direction Button */}
       <div className="flex justify-center">
         <button
+          type="button"
           onClick={() => { const temp = fromAsset; setFromAsset(toAsset); setToAsset(temp); }}
-          className="w-10 h-10 rounded-full bg-[#141C1F] border border-[#263437] flex items-center justify-center text-[#22C55E] hover:bg-[#1A2528] transition-colors"
+          aria-label="Reverse swap direction"
+          className="min-h-11 min-w-11 w-11 h-11 rounded-full bg-[#141C1F] border border-[#263437] flex items-center justify-center text-[#22C55E] hover:bg-[#1A2528] motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]"
         >
-          <Icon icon="solar:arrow-right-left-bold" className="w-5 h-5" />
+          <Icon icon="solar:arrow-right-left-bold" className="w-5 h-5" aria-hidden="true" />
         </button>
       </div>
 
@@ -105,7 +118,8 @@ export default function SwapForm({ onPreview }: SwapFormProps) {
           <select
             value={toAsset}
             onChange={e => setToAsset(e.target.value)}
-            className="rounded-xl border border-[#263437] bg-[#0A0F11] px-3 py-3 text-sm text-white font-mono min-w-[100px]"
+            aria-label="Receive asset"
+            className="min-h-11 rounded-xl border border-[#263437] bg-[#0A0F11] px-3 py-3 text-sm text-white font-mono min-w-[100px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]"
           >
             {availableTo.map(a => (
               <option key={a.symbol} value={a.symbol}>{a.symbol}</option>
@@ -117,12 +131,13 @@ export default function SwapForm({ onPreview }: SwapFormProps) {
         </div>
       </div>
 
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
 
       <button
+        type="button"
         onClick={handleGetQuote}
         disabled={!amount || parseFloat(amount) <= 0 || loading}
-        className="w-full py-3 rounded-full bg-[#22C55E] text-[#0A0D0C] text-xs font-semibold hover:bg-[#16A34A] disabled:opacity-40 transition-colors"
+        className="min-h-11 w-full py-3 rounded-full bg-[#22C55E] text-[#0A0D0C] text-xs font-semibold hover:bg-[#16A34A] disabled:opacity-40 motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0F11]"
       >
         {loading ? 'Fetching Rate...' : 'Get Swap Quote'}
       </button>

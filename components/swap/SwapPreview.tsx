@@ -70,19 +70,21 @@ export default function SwapPreview({ quote, onConfirm, onCancel }: SwapPreviewP
         </div>
       </div>
 
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
 
       <div className="flex gap-3">
         <button
+          type="button"
           onClick={onCancel}
-          className="flex-1 py-2.5 rounded-full border border-[#263437] text-xs font-medium text-[#93A09A] hover:bg-[#0A0F11]"
+          className="min-h-11 flex-1 py-2.5 rounded-full border border-[#263437] text-xs font-medium text-[#93A09A] hover:bg-[#0A0F11] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]"
         >
           Cancel
         </button>
         <button
+          type="button"
           onClick={handleConfirm}
           disabled={executing}
-          className="flex-1 py-2.5 rounded-full bg-[#22C55E] text-[#07110B] text-xs font-semibold hover:bg-[#16A34A] disabled:opacity-40"
+          className="min-h-11 flex-1 py-2.5 rounded-full bg-[#22C55E] text-[#07110B] text-xs font-semibold hover:bg-[#16A34A] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0F11]"
         >
           {executing ? 'Swapping...' : 'Confirm Swap'}
         </button>
