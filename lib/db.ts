@@ -19,7 +19,9 @@ function getClient() {
     max: 10,
     idle_timeout: 20,
     connect_timeout: 10,
-    ssl: url.includes('localhost') ? false : { rejectUnauthorized: false },
+    // Never disable certificate verification in production: a MITM with a
+    // forged cert could otherwise intercept database traffic unnoticed.
+    ssl: url.includes('localhost') ? false : { rejectUnauthorized: true },
   });
   return client;
 }

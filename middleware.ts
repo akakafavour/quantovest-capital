@@ -56,7 +56,15 @@ export async function middleware(request: NextRequest) {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!supabaseUrl || !supabaseKey) return response;
+  // Fail closed: without the Supabase URL/key the middleware cannot verify
+  // sessions, so every request (pages and API) gets a 503 instead of an
+  // unauthenticated passthrough that would bypass route guards.
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.json(
+      { error: 'Service temporarily unavailable.' },
+      { status: 503 },
+    );
+  }
 
   const { pathname, searchParams } = request.nextUrl;
   if (pathname === '/' && searchParams.has('code')) {
@@ -109,6 +117,10 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
     if (!isAdmin) {
+      // API consumers must get machine-readable 403s, not a redirect to a page.
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
     return response;

@@ -72,17 +72,33 @@ function dynamicTruncate(hmac: Uint8Array): number {
 
 export function generateSecret(length = 20): string {
   const bytes = new Uint8Array(length);
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-    crypto.getRandomValues(bytes);
-  } else {
-    for (let i = 0; i < length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  // Fail closed: never fall back to Math.random() (predictable). Web Crypto
+  // is available in all supported browsers, Node 18+, and Edge runtimes.
+  if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
+    throw new Error('Secure random number generator is unavailable in this environment.');
   }
+  crypto.getRandomValues(bytes);
   return encodeBase32(bytes);
 }
 
-export function getQRCodeUrl(email: string, secret: string): string {
+/**
+ * Build the otpauth:// URI for a TOTP secret (does NOT render an image).
+ */
+export function getTotpUri(email: string, secret: string): string {
   const issuer = 'Quantovest';
-  const otpauth = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}`;
+  return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}`;
+}
+
+/**
+ * @deprecated SECURITY: renders the QR by sending the otpauth URI (which
+ * contains the raw TOTP secret) to a third-party image API off-origin. Any
+ * secret passed here leaks to that origin's logs. Kept only for backward
+ * compat — new UI must render the QR code CLIENT-SIDE from `getTotpUri()`
+ * output (e.g. a canvas QR renderer bundled with the app) so the secret
+ * never leaves the user's browser. See components/totp-qr.tsx.
+ */
+export function getQRCodeUrl(email: string, secret: string): string {
+  const otpauth = getTotpUri(email, secret);
   return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(otpauth)}`;
 }
 
