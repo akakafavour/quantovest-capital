@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { getCurrentIdentity } from "@/lib/supabase/identity";
 import { createTwoFactorToken } from "@/lib/2fa-session";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { users } from "@/db/schema";
 import { verifyRecoveryCode } from "@/lib/recovery-codes";
-
-const failedAttempts = new Map<string, { count: number; windowStarted: number }>();
-const ATTEMPT_WINDOW_MS = 10 * 60 * 1000;
-const MAX_ATTEMPTS = 5;
+import {
+  checkAuthRateLimit,
+  clearAuthFailures,
+  rateLimitHeaders,
+  recordAuthFailure,
+} from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -37,18 +38,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "2FA is not enabled for this account." }, { status: 400 });
     }
 
-    const now = Date.now();
-    const current = failedAttempts.get(userId);
-    if (current && now - current.windowStarted < ATTEMPT_WINDOW_MS && current.count >= MAX_ATTEMPTS) {
-      return NextResponse.json({ error: "Too many attempts. Please wait 10 minutes and try again." }, { status: 429 });
+    const limit = await checkAuthRateLimit(`recover:${userId}`);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please wait 10 minutes and try again." },
+        { status: 429, headers: rateLimitHeaders(limit) },
+      );
     }
     const valid = await verifyRecoveryCode(userId, body.code);
     if (!valid) {
-      if (!current || now - current.windowStarted >= ATTEMPT_WINDOW_MS) failedAttempts.set(userId, { count: 1, windowStarted: now });
-      else current.count += 1;
+      await recordAuthFailure(`recover:${userId}`);
       return NextResponse.json({ error: "Invalid or already used recovery code." }, { status: 401 });
     }
-    failedAttempts.delete(userId);
+    await clearAuthFailures(`recover:${userId}`);
 
     const response = NextResponse.json({ verified: true });
     response.cookies.set('qv_2fa_verified', await createTwoFactorToken(userId), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 3600, path: '/' });

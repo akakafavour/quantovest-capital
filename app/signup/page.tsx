@@ -31,23 +31,47 @@ export default function SignupPage() {
     }
 
     setLoading(true);
-    const refMatch = document.cookie.match(/(?:^|;\s*)referral_code=([^;]+)/);
-    const referralCode = refMatch ? decodeURIComponent(refMatch[1]) : null;
-    const res = await fetch('/api/auth/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, referralCode }),
-    });
-    const data = await res.json();
-    if (!res.ok) { setMessage(data.error || 'Signup failed'); setLoading(false); return; }
-    if (data.session) router.push('/dashboard'); else setMessage('Check your email to confirm your account, then sign in.');
-    setLoading(false);
+    try {
+      const refMatch = document.cookie.match(/(?:^|;\s*)referral_code=([^;]+)/);
+      const referralCode = refMatch ? decodeURIComponent(refMatch[1]) : null;
+      const trimmedName = name.trim();
+      const trimmedEmail = email.trim();
+      if (trimmedName.length < 2) {
+        setMessage('Enter your full legal name.');
+        setLoading(false);
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        setMessage('Enter a valid email address.');
+        setLoading(false);
+        return;
+      }
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedName, email: trimmedEmail, password, referralCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMessage(data.error || 'Signup failed'); setLoading(false); return; }
+      // New contract: { user, emailConfirmationRequired }. Legacy fallback kept
+      // for cached API responses that still include `session`.
+      const needsConfirmation = data.emailConfirmationRequired ?? !data.session;
+      if (!needsConfirmation) router.push('/dashboard'); else setMessage('Check your email to confirm your account, then sign in.');
+    } catch {
+      setMessage('Signup failed. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function oauth(provider: 'google') {
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` } });
-    if (error) setMessage(error.message);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` } });
+      if (error) setMessage(error.message);
+    } catch {
+      setMessage('Google sign up failed. Check your connection and try again.');
+    }
   }
 
   return (

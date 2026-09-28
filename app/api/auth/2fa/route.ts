@@ -7,31 +7,16 @@ import { users, recoveryCodes } from '@/db/schema';
 import { generateRecoveryCodes } from '@/lib/recovery-codes';
 import { verifyTOTP } from '@/lib/totp';
 import { createTwoFactorToken } from '@/lib/2fa-session';
+import {
+  checkAuthRateLimit,
+  clearAuthFailures,
+  rateLimitHeaders,
+  recordAuthFailure,
+} from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
-const failedAttempts = new Map<string, { count: number; windowStarted: number }>();
-const ATTEMPT_WINDOW_MS = 10 * 60 * 1000;
-const MAX_ATTEMPTS = 5;
-
-function limited(userId: string) {
-  const now = Date.now();
-  const current = failedAttempts.get(userId);
-  if (!current || now - current.windowStarted >= ATTEMPT_WINDOW_MS) {
-    failedAttempts.set(userId, { count: 0, windowStarted: now });
-    return false;
-  }
-  return current.count >= MAX_ATTEMPTS;
-}
-
-function recordFailure(userId: string) {
-  const now = Date.now();
-  const current = failedAttempts.get(userId);
-  if (!current || now - current.windowStarted >= ATTEMPT_WINDOW_MS) failedAttempts.set(userId, { count: 1, windowStarted: now });
-  else current.count += 1;
-}
-
-function clearFailures(userId: string) { failedAttempts.delete(userId); }
+const TOO_MANY = 'Too many attempts. Please wait 10 minutes and try again.';
 
 export async function POST(request: Request) {
   const actor = await getCurrentIdentity();
@@ -65,12 +50,15 @@ export async function POST(request: Request) {
   }
 
   if (body.action === 'verify') {
-    if (limited(actor.id)) return NextResponse.json({ error: 'Too many attempts. Please wait 10 minutes and try again.' }, { status: 429 });
+    const limit = await checkAuthRateLimit(`2fa:verify:${actor.id}`);
+    if (!limit.allowed) {
+      return NextResponse.json({ error: TOO_MANY }, { status: 429, headers: rateLimitHeaders(limit) });
+    }
     if (!user.twoFactorEnabled || !user.twoFactorSecret || !(await verifyTOTP(user.twoFactorSecret, body.code))) {
-      recordFailure(actor.id);
+      await recordAuthFailure(`2fa:verify:${actor.id}`);
       return NextResponse.json({ error: 'Invalid authenticator code.' }, { status: 400 });
     }
-    clearFailures(actor.id);
+    await clearAuthFailures(`2fa:verify:${actor.id}`);
     const token = await createTwoFactorToken(actor.id);
     const response = NextResponse.json({ verified: true });
     response.cookies.set('qv_2fa_verified', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 3600, path: '/' });
@@ -79,9 +67,15 @@ export async function POST(request: Request) {
   }
 
   if (body.action === 'disable') {
+    const limit = await checkAuthRateLimit(`2fa:disable:${actor.id}`);
+    if (!limit.allowed) {
+      return NextResponse.json({ error: TOO_MANY }, { status: 429, headers: rateLimitHeaders(limit) });
+    }
     if (!user.twoFactorEnabled || !user.twoFactorSecret || !(await verifyTOTP(user.twoFactorSecret, body.code))) {
+      await recordAuthFailure(`2fa:disable:${actor.id}`);
       return NextResponse.json({ error: 'Invalid authenticator code.' }, { status: 400 });
     }
+    await clearAuthFailures(`2fa:disable:${actor.id}`);
     await db.transaction(async tx => {
       await tx.update(users).set({ twoFactorEnabled: false, twoFactorSecret: null }).where(eq(users.id, actor.id));
       await tx.delete(recoveryCodes).where(and(eq(recoveryCodes.userId, actor.id), isNull(recoveryCodes.usedAt)));
