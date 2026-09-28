@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -12,6 +12,7 @@ export default function ResetPasswordPage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -24,7 +25,7 @@ export default function ResetPasswordPage() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true);
     });
-    return () => { data.subscription.unsubscribe(); };
+    return () => { data.subscription.unsubscribe(); if (redirectTimer.current) clearTimeout(redirectTimer.current); };
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -41,15 +42,20 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ password });
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setMessage('Password updated successfully!');
-      setTimeout(() => router.push('/dashboard'), 1500);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        setMessage(error.message);
+      } else {
+        setMessage('Password updated successfully!');
+        redirectTimer.current = setTimeout(() => router.push('/dashboard'), 1500);
+      }
+    } catch {
+      setMessage('Could not update password. Check your connection and try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (

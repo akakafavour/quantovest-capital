@@ -12,19 +12,29 @@ export default function ForgotPasswordPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const trimmed = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setMessage('Enter a valid email address.');
+      return;
+    }
     setLoading(true);
     setMessage('');
-    const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setSent(true);
-      setMessage('Check your email for a password reset link.');
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        setMessage(error.message);
+      } else {
+        setSent(true);
+        setMessage('Check your email for a password reset link.');
+      }
+    } catch {
+      setMessage('Could not send reset link. Check your connection and try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -40,7 +50,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         {message && (
-          <div className={`text-xs text-center px-4 py-2.5 rounded-xl border ${
+          <div role={sent ? 'status' : 'alert'} aria-live="polite" className={`text-xs text-center px-4 py-2.5 rounded-xl border ${
             sent
               ? 'bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E]'
               : 'bg-red-900/20 border-red-800/40 text-red-400'

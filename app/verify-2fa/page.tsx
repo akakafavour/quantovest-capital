@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -48,7 +46,16 @@ export default function Verify2FAPage() {
   }, []);
 
   async function handleVerify() {
-    if (!code) return;
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    if (mode === 'totp' && !/^\d{6}$/.test(trimmed)) {
+      setMessage('Enter the 6-digit code from your authenticator app.');
+      return;
+    }
+    if (mode === 'recovery' && trimmed.length < 6) {
+      setMessage('Enter your recovery code.');
+      return;
+    }
     setLoading(true);
     setMessage('');
 
@@ -57,7 +64,7 @@ export default function Verify2FAPage() {
         const res = await fetch('/api/auth/2fa', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'verify', code }),
+          body: JSON.stringify({ action: 'verify', code: trimmed }),
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
@@ -74,7 +81,7 @@ export default function Verify2FAPage() {
         const res = await fetch('/api/auth/recover', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, code }),
+          body: JSON.stringify({ userId, code: trimmed }),
         });
         const data = await res.json();
         if (res.ok) {
@@ -132,7 +139,7 @@ export default function Verify2FAPage() {
         </div>
 
         {message && (
-          <div className="text-xs text-center px-4 py-2.5 rounded-xl border bg-red-900/20 border-red-800/40 text-red-400">
+          <div role="alert" aria-live="assertive" className="text-xs text-center px-4 py-2.5 rounded-xl border bg-red-900/20 border-red-800/40 text-red-400">
             {message}
           </div>
         )}
@@ -142,16 +149,19 @@ export default function Verify2FAPage() {
             {mode === 'totp' ? 'TOTP Code' : 'Recovery Code'}
             <input
               value={code}
-              onChange={e => setCode(e.target.value)}
+              onChange={e => setCode(mode === 'totp' ? e.target.value.replace(/\D/g, '').slice(0, 6) : e.target.value.slice(0, 20))}
               maxLength={mode === 'totp' ? 6 : 20}
               placeholder={mode === 'totp' ? '000000' : 'XXXXXXXX'}
-              className="mt-1 w-full rounded-xl border border-[#202722] bg-[#0A0D0C] px-4 py-3 text-sm text-white font-mono text-center tracking-[0.3em]"
+              inputMode={mode === 'totp' ? 'numeric' : 'text'}
+              autoComplete="one-time-code"
+              aria-label={mode === 'totp' ? 'Six-digit authenticator code' : 'Recovery code'}
+              className="mt-1 min-h-11 w-full rounded-xl border border-[#202722] bg-[#0A0D0C] px-4 py-3 text-sm text-white font-mono text-center tracking-[0.3em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]"
             />
           </label>
           <button
             onClick={handleVerify}
-            disabled={loading || code.length < 6}
-            className="w-full py-3 rounded-full bg-[#22C55E] text-[#0A0D0C] text-xs font-semibold hover:bg-[#16A34A] transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            disabled={loading || code.trim().length < 6}
+            className="min-h-11 w-full py-3 rounded-full bg-[#22C55E] text-[#0A0D0C] text-xs font-semibold hover:bg-[#16A34A] motion-safe:transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0D0C]"
           >
             {loading ? (
               'Verifying...'

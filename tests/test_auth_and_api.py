@@ -21,8 +21,14 @@ def test_production_auth_redirects_use_canonical_app_url():
     signup_route = (ROOT / "app" / "api" / "auth" / "signup" / "route.ts").read_text()
     middleware = (ROOT / "middleware.ts").read_text()
     callback = (ROOT / "app" / "auth" / "callback" / "route.ts").read_text()
-    assert "process.env.APP_PUBLIC_URL" in signup_route
-    assert "/auth/callback?next=/dashboard" in signup_route
+    redirect_helper = (ROOT / "lib" / "auth-redirect.ts").read_text()
+    # Signup must build its email redirect from the allowlisted canonical URL
+    # helper (fail-closed in prod), never from the request origin.
+    assert "getAllowedAppUrl" in signup_route
+    assert "buildEmailRedirectTo" in signup_route
+    assert "process.env.APP_PUBLIC_URL" in redirect_helper
+    assert "www.quantovests.com" in redirect_helper
+    assert "/auth/callback" in redirect_helper
     assert "pathname === '/' && searchParams.has('code')" in middleware
     assert "pathname = '/auth/callback'" in middleware
     assert "exchangeCodeForSession" in callback
