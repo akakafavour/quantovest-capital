@@ -46,13 +46,13 @@ export async function PATCH(request: Request) {
     const { identity, error } = await requireAdmin();
     if (error) return error;
     const db = getDb();
-    if (!db) return NextResponse.json({ error: 'Database is not configured' }, { status: 503 });
+    if (!db) return databaseUnavailable('admin deposits PATCH');
     const body = await request.json().catch(() => null) as { depositId?: string; action?: 'approve' | 'reject'; reviewNote?: string } | null;
     if (!body?.depositId || (body.action !== 'approve' && body.action !== 'reject')) return NextResponse.json({ error: 'Deposit and action are required.' }, { status: 400 });
     try {
     const result = await db.transaction(async tx => {
       // 1. Find the deposit and confirm it is pending FIRST (prevents race conditions)
-      const rows = await tx.select().from(deposits).where(and(eq(deposits.id, body.depositId!), eq(deposits.status, 'pending'))).limit(1);
+      const rows = await tx.select().from(deposits).where(and(eq(deposits.id, body.depositId!), eq(deposits.status, 'pending'))).limit(1).for('update');
       if (!rows[0]) {
         const existing = await tx.select({ id: deposits.id, status: deposits.status }).from(deposits).where(eq(deposits.id, body.depositId!)).limit(1);
         if (!existing[0]) throw new Error('Deposit not found.');
@@ -69,7 +69,7 @@ export async function PATCH(request: Request) {
       // 2. Mark deposit as completed BEFORE touching balance (prevents re-processing)
       await tx.update(deposits).set({ status: 'completed', reviewedBy: identity.id, reviewNote: body.reviewNote?.trim() || null, updatedAt: new Date() }).where(eq(deposits.id, deposit.id));
       // 3. Credit investor balance and principal ΓÇö principal (not profit) drives plan eligibility
-      const existingAccounts = await tx.select().from(investorAccounts).where(eq(investorAccounts.investorId, deposit.investorId)).limit(1);
+      const existingAccounts = await tx.select().from(investorAccounts).where(eq(investorAccounts.investorId, deposit.investorId)).limit(1).for('update');
       let accountId: string;
       let currentPlanId: number | null = null;
       let newPrincipalCents: number;
@@ -114,8 +114,8 @@ export async function PATCH(request: Request) {
     try {
       const investor = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, result.investorId)).limit(1);
       if (investor[0]?.email) {
-        if (result.status === 'completed') sendDepositApproved(investor[0].email, investor[0].name || 'Investor', `$${(result.amountCents / 100).toFixed(2)}`, 'Account Balance');
-        else sendDepositRejected(investor[0].email, investor[0].name || 'Investor', body.reviewNote?.trim() || 'Deposit proof did not meet requirements.');
+        if (result.status === 'completed') void sendDepositApproved(investor[0].email, investor[0].name || 'Investor', `$${(result.amountCents / 100).toFixed(2)}`, 'Account Balance').catch(emailError => console.error('[deposit email]', emailError));
+        else void sendDepositRejected(investor[0].email, investor[0].name || 'Investor', body.reviewNote?.trim() || 'Deposit proof did not meet requirements.').catch(emailError => console.error('[deposit email]', emailError));
       }
     } catch {}
     return NextResponse.json(result);

@@ -95,7 +95,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
     <div class="body">${content}</div>
     <div class="footer">
       <p>Quantovest Capital — Your Capital. Their Expertise.</p>
-      <p><a href="${APP_URL}/dashboard">View Dashboard</a> · <a href="${APP_URL}/legal/terms">Terms</a> · <a href="${APP_URL}/legal/privacy">Privacy</a></p>
+      <p><a href="${esc(APP_URL)}/dashboard">View Dashboard</a> · <a href="${esc(APP_URL)}/legal/terms">Terms</a> · <a href="${esc(APP_URL)}/legal/privacy">Privacy</a></p>
       <p style="margin-top: 12px; font-size: 11px; color: #d1d5db;">
         Risk Warning: Trading involves substantial risk of loss. Past performance is not indicative of future results.
         You should not invest more than you can afford to lose. Please read our full risk disclosure.
@@ -104,7 +104,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
   </div>
 </body>
 </html>`,
-    text: `${title}\n\nHello ${esc(data.investorName)},\n\n${content.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()}\n\nView your dashboard: ${APP_URL}/dashboard\n\nQuantovest Capital — Your Capital. Their Expertise.`,
+    text: `${title}\n\nHello ${esc(data.investorName)},\n\n${content.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()}\n\nView your dashboard: ${esc(APP_URL)}/dashboard\n\nQuantovest Capital — Your Capital. Their Expertise.`,
   });
 
   switch (name) {
@@ -115,7 +115,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <p>Your Quantovest Capital account has been created. You can now fund your account, choose an investment plan, and follow professional traders.</p>
         <div class="detail-row"><span class="detail-label">Start Investing</span><span class="detail-value">From $1,500</span></div>
         <div class="detail-row"><span class="detail-label">Support</span><span class="detail-value"><a href="mailto:support@quantovests.com">support@quantovests.com</a></span></div>
-        <a href="${APP_URL}/dashboard" class="cta">Go to Dashboard</a>
+        <a href="${esc(APP_URL)}/dashboard" class="cta">Go to Dashboard</a>
       `);
 
     case 'deposit_submitted':
@@ -124,7 +124,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <p>Hello ${esc(data.investorName)},</p>
         <p>We&apos;ve received your deposit request and it&apos;s now being reviewed.</p>
         <div class="highlight">
-          <div class="amount">${data.amount}</div>
+          <div class="amount">${esc(data.amount)}</div>
           <p style="margin:8px 0 0;font-size:14px;color:#f59e0b;font-weight:600">Pending Verification</p>
         </div>
         <p style="font-size:14px;color:#6b7280;">Our team will review your submission shortly. You&apos;ll receive an email once it&apos;s approved.</p>
@@ -136,13 +136,13 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <p>Hello ${esc(data.investorName)},</p>
         <p>Your deposit has been approved and credited to your account.</p>
         <div class="highlight">
-          <div class="amount">${data.amount}</div>
+          <div class="amount">${esc(data.amount)}</div>
           <p style="margin:8px 0 0;font-size:14px;color:#16a34a;font-weight:600">Credited to ${esc(data.planName)} Plan</p>
         </div>
         <div class="detail-row"><span class="detail-label">Plan</span><span class="detail-value">${esc(data.planName)}</span></div>
-        <div class="detail-row"><span class="detail-label">Amount</span><span class="detail-value">${data.amount}</span></div>
+        <div class="detail-row"><span class="detail-label">Amount</span><span class="detail-value">${esc(data.amount)}</span></div>
         <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value" style="color:#16a34a">Completed</span></div>
-        <a href="${APP_URL}/dashboard" class="cta">View Dashboard</a>
+        <a href="${esc(APP_URL)}/dashboard" class="cta">View Dashboard</a>
       `);
 
     case 'deposit_rejected':
@@ -154,7 +154,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
           <p style="color:#dc2626;font-weight:600;margin:0;">Reason</p>
           <p style="margin:8px 0 0;color:#7f1d1d;">${esc(data.reason)}</p>
         </div>
-        <a href="${APP_URL}/dashboard/deposit" class="cta">Try Again</a>
+        <a href="${esc(APP_URL)}/dashboard/deposit" class="cta">Try Again</a>
       `);
 
     case 'plan_updated':
@@ -168,7 +168,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         </div>
         <div class="detail-row"><span class="detail-label">Previous Plan</span><span class="detail-value">${esc(data.previousPlan)}</span></div>
         <div class="detail-row"><span class="detail-label">New Plan</span><span class="detail-value" style="color:#16a34a">${esc(data.planName)}</span></div>
-        <a href="${APP_URL}/dashboard" class="cta">View Dashboard</a>
+        <a href="${esc(APP_URL)}/dashboard" class="cta">View Dashboard</a>
       `);
 
     case 'roi_published':
@@ -177,10 +177,10 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <p>Hello ${esc(data.investorName)},</p>
         <p>Today&apos;s return has been credited to your account.</p>
         <div class="highlight">
-          <div class="amount">${data.roiPercent}%</div>
-          <p style="margin:8px 0 0;font-size:14px;color:#16a34a;font-weight:600">+${data.profitAmount} added to balance</p>
+          <div class="amount">${esc(data.roiPercent)}%</div>
+          <p style="margin:8px 0 0;font-size:14px;color:#16a34a;font-weight:600">+${esc(data.profitAmount)} added to balance</p>
         </div>
-        <a href="${APP_URL}/dashboard" class="cta">View Dashboard</a>
+        <a href="${esc(APP_URL)}/dashboard" class="cta">View Dashboard</a>
       `);
 
     case 'kyc_submitted':
@@ -202,7 +202,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <div style="text-align:center;padding:20px;">
           <span style="display:inline-block;background:#f0fdf4;color:#16a34a;font-weight:700;font-size:16px;padding:8px 24px;border-radius:100px;">✓ Verified</span>
         </div>
-        <a href="${APP_URL}/dashboard" class="cta">Go to Dashboard</a>
+        <a href="${esc(APP_URL)}/dashboard" class="cta">Go to Dashboard</a>
       `);
 
     case 'kyc_declined':
@@ -214,7 +214,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
           <p style="color:#dc2626;font-weight:600;margin:0;">Reason</p>
           <p style="margin:8px 0 0;color:#7f1d1d;">${esc(data.reason)}</p>
         </div>
-        <a href="${APP_URL}/dashboard/kyc" class="cta">Resubmit Documents</a>
+        <a href="${esc(APP_URL)}/dashboard/kyc" class="cta">Resubmit Documents</a>
       `);
 
     case 'withdrawal_submitted':
@@ -223,7 +223,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <p>Hello ${esc(data.investorName)},</p>
         <p>Your withdrawal request has been submitted and is pending review.</p>
         <div class="highlight">
-          <div class="amount">${data.amount}</div>
+          <div class="amount">${esc(data.amount)}</div>
           <p style="margin:8px 0 0;font-size:14px;color:#f59e0b;font-weight:600">Pending Admin Approval</p>
         </div>
       `);
@@ -234,7 +234,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <p>Hello ${esc(data.investorName)},</p>
         <p>Your withdrawal has been processed.</p>
         <div class="highlight">
-          <div class="amount">${data.amount}</div>
+          <div class="amount">${esc(data.amount)}</div>
           <p style="margin:8px 0 0;font-size:14px;color:#16a34a;font-weight:600">Completed</p>
         </div>
       `);
@@ -248,7 +248,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
           <p style="color:#dc2626;font-weight:600;margin:0;">Reason</p>
           <p style="margin:8px 0 0;color:#7f1d1d;">${esc(data.reason)}</p>
         </div>
-        <a href="${APP_URL}/dashboard/withdraw" class="cta">View Withdrawals</a>
+        <a href="${esc(APP_URL)}/dashboard/withdraw" class="cta">View Withdrawals</a>
       `);
 
     case 'referral_reward_credited':
@@ -257,7 +257,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <p>Hello ${esc(data.investorName)},</p>
         <p>A referral reward has been credited to your account.</p>
         <div class="highlight">
-          <div class="amount">${data.amount}</div>
+          <div class="amount">${esc(data.amount)}</div>
           <p style="margin:8px 0 0;font-size:14px;color:#16a34a;font-weight:600">Referral Bonus</p>
         </div>
       `);
@@ -270,7 +270,7 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0;">
           <p style="margin:0;">${esc(data.message)}</p>
         </div>
-        <a href="${APP_URL}/dashboard" class="cta">View Dashboard</a>
+        <a href="${esc(APP_URL)}/dashboard" class="cta">View Dashboard</a>
       `);
 
     case 'security_alert':
@@ -281,9 +281,9 @@ function renderTemplate(name: TemplateName, data: TemplateData): EmailTemplate {
         <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin:16px 0;">
           <p style="color:#dc2626;font-weight:600;margin:0;">Event</p>
           <p style="margin:8px 0 0;color:#7f1d1d;">${esc(data.message)}</p>
-          <p style="margin:8px 0 0;font-size:12px;color:#9ca3af;">Time: ${data.eventTime}</p>
+          <p style="margin:8px 0 0;font-size:12px;color:#9ca3af;">Time: ${esc(data.eventTime)}</p>
         </div>
-        <a href="${APP_URL}/dashboard/settings" class="cta">Review Security Settings</a>
+        <a href="${esc(APP_URL)}/dashboard/settings" class="cta">Review Security Settings</a>
       `);
 
     default:
@@ -302,6 +302,7 @@ const EMAIL_FROM =
 function smtpCommand(socket: net.Socket, command: string): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = '';
+    const timer = setTimeout(() => { socket.off('data', onData); reject(new Error('SMTP command timed out.')); }, 15000);
     const onData = (chunk: Buffer) => {
       data += chunk.toString('utf8');
       // A reply is complete when a line ends with "\r\n<code> " (more to come) or
@@ -310,13 +311,13 @@ function smtpCommand(socket: net.Socket, command: string): Promise<string> {
       const lines = data.split('\r\n').filter(Boolean);
       const last = lines[lines.length - 1];
       if (last && /^\d{3} /.test(last)) {
+        clearTimeout(timer);
         socket.off('data', onData);
         resolve(data);
       }
     };
     socket.on('data', onData);
     socket.write(`${command}\r\n`);
-    setTimeout(() => { socket.off('data', onData); reject(new Error('SMTP command timed out.')); }, 15000);
   });
 }
 
@@ -402,8 +403,13 @@ export async function sendEmail(
   const user = process.env.ZOHO_SMTP_USER;
   const password = process.env.ZOHO_SMTP_PASS;
 
-  // Without credentials, log to console (development mode)
+  // Without credentials, log to console (development mode).
+  // In production, report as unsent so callers can retry or surface it.
   if (!user || !password || /<FILL_|replace-with/i.test(user) || /<FILL_|replace-with/i.test(password)) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[EMAIL] Credentials missing — email not sent.');
+      return { sent: false, error: 'Email service is not configured.' };
+    }
     console.log(`[EMAIL DEV] To: ${to} | Subject: ${template.subject}`);
     console.log(`[EMAIL DEV] Text: ${template.text.substring(0, 200)}...`);
     return { sent: true };

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth-helpers';
 import { getDb } from '@/lib/db';
+import { databaseUnavailable } from '@/lib/api-errors';
+import { logAuditEvent } from '@/lib/audit';
 import { investorAccounts, plans, portfolioLedger, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { notifyUser } from '@/lib/notifications';
@@ -16,15 +18,20 @@ export async function POST(request: Request) {
     if (error) return error;
 
     const db = getDb();
-    if (!db) return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
+    if (!db) return databaseUnavailable('admin assign-plan POST');
 
     const body = await request.json().catch(() => null) as {
       investorId?: string;
       planName?: string;
+      confirmCredit?: boolean;
     } | null;
 
     if (!body?.investorId || !body?.planName) {
       return NextResponse.json({ error: 'Investor ID and plan name are required.' }, { status: 400 });
+    }
+
+    if (body.confirmCredit !== true) {
+      return NextResponse.json({ error: 'Explicit credit confirmation is required. Pass confirmCredit: true to credit the plan minimum.' }, { status: 400 });
     }
 
       const result = await db.transaction(async tx => {
@@ -73,10 +80,11 @@ export async function POST(request: Request) {
     });
 
     const dollars = (result.creditedCents / 100).toFixed(2);
+    logAuditEvent(identity.id, 'plan_assigned', 'investor', result.investorId, { plan: result.plan, creditedCents: result.creditedCents });
     await notifyUser(result.investorId, 'plan_updated', 'Plan assigned', `Your account has been upgraded to the ${result.plan} plan and $${dollars} has been credited to your balance.`);
     try {
       const investor = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, result.investorId)).limit(1);
-      if (investor[0]?.email) sendPlanUpdated(investor[0].email, investor[0].name || 'Investor', 'Previous plan', result.plan);
+      if (investor[0]?.email) void sendPlanUpdated(investor[0].email, investor[0].name || 'Investor', 'Previous plan', result.plan).catch(emailError => console.error('[assign-plan email]', emailError));
     } catch {}
 
     return NextResponse.json(result);

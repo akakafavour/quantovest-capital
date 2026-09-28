@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { getCurrentIdentity } from '@/lib/supabase/identity';
 import { getDb } from '@/lib/db';
+import { databaseUnavailable } from '@/lib/api-errors';
 import { investorAccounts, investorWithdrawals, portfolioLedger, users } from '@/db/schema';
 import { notifyAdmins, notifyUser } from '@/lib/notifications';
 import { sendWithdrawalSubmitted } from '@/lib/email';
@@ -16,11 +17,10 @@ export async function GET() {
     const actor = await getCurrentIdentity();
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const db = getDb();
-    if (!db) return NextResponse.json([]);
+    if (!db) return databaseUnavailable('withdrawals GET');
     return NextResponse.json(await db.select().from(investorWithdrawals).where(eq(investorWithdrawals.investorId, actor.id)));
   } catch (err) {
-    console.error('[withdrawals GET]', err);
-    return NextResponse.json([]);
+    return databaseUnavailable('withdrawals GET', err);
   }
 }
 
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   const actor = await getCurrentIdentity();
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const db = getDb();
-  if (!db) return NextResponse.json({ error: 'Database is not configured' }, { status: 503 });
+  if (!db) return databaseUnavailable('withdrawals POST');
   const body = await request.json().catch(() => null) as { amountCents?: number; destinationType?: 'bank' | 'crypto'; destination?: string; totpCode?: string; closeAccount?: boolean } | null;
   if (!body?.amountCents || !Number.isInteger(body.amountCents) || body.amountCents <= 0 || (body.destinationType !== 'bank' && body.destinationType !== 'crypto') || !body.destination?.trim()) return NextResponse.json({ error: 'A valid amount and bank or crypto destination are required.' }, { status: 400 });
   // Server-side 2FA: the code is verified here against the stored secret.
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   const closeAccount = body.closeAccount === true;
   try {
     const withdrawalId = await db.transaction(async tx => {
-      const accounts = await tx.select().from(investorAccounts).where(and(eq(investorAccounts.investorId, actor.id), eq(investorAccounts.status, 'active'))).limit(1);
+      const accounts = await tx.select().from(investorAccounts).where(and(eq(investorAccounts.investorId, actor.id), eq(investorAccounts.status, 'active'))).limit(1).for('update');
       if (!accounts[0]) throw new Error('No active investor account found.');
       if (accounts[0].balanceCents < MIN_WITHDRAW_BALANCE_CENTS) throw new Error('A minimum balance of $3,000 is required to withdraw.');
       if (accounts[0].balanceCents < body.amountCents!) throw new Error('Insufficient available balance.');
