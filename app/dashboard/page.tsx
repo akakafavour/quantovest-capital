@@ -9,10 +9,18 @@ import { Icon } from '@iconify/react';
 import Link from 'next/link';
 import dynamicImport from 'next/dynamic';
 
-const DynamicAllocationRingChart = dynamicImport(() => import('@/components/AllocationRingChart'), { ssr: false });
-const DashboardAreaChart = dynamicImport(() => import('@/components/DashboardAreaChart'), { ssr: false });
-
-export const dynamic = 'force-dynamic';
+const DynamicAllocationRingChart = dynamicImport(() => import('@/components/AllocationRingChart'), {
+  ssr: false,
+  loading: () => (
+    <div className="p-6 rounded-2xl bg-[#141C1F] border border-[#263437] h-56 motion-safe:animate-pulse" role="status" aria-label="Loading allocation chart" />
+  ),
+});
+const DashboardAreaChart = dynamicImport(() => import('@/components/DashboardAreaChart'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-72 w-full rounded-xl border border-[#263437] bg-[#0A0F11] motion-safe:animate-pulse" role="status" aria-label="Loading portfolio chart" />
+  ),
+});
 
 interface Profile {
   id: string;
@@ -63,6 +71,13 @@ interface KycRow {
   createdAt: string;
 }
 
+interface LedgerRow {
+  id: number;
+  type: string;
+  amountCents: number;
+  createdAt: string;
+}
+
 interface ChartPoint {
   date: string;
   value: number;
@@ -70,9 +85,16 @@ interface ChartPoint {
 
 interface ActivityLog {
   id: string;
+  kind: 'deposit' | 'withdrawal';
   date: string;
+  timestamp: number;
   percentage: number;
   marketNote: string;
+}
+
+function formatMoneyTwoDecimals(value: number): string {
+  const num = Number.isFinite(value) ? value : 0;
+  return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function LoadingSkeleton() {
@@ -128,13 +150,13 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
   return (
     <div className="dashboard-shell min-h-screen bg-[#0A0F11] text-[#F3F7F4] flex flex-col md:flex-row font-sans">
       <div className="flex-1 flex items-center justify-center p-8">
-        <div className="text-center space-y-4 max-w-sm">
-          <Icon icon="solar:server-bold" className="w-12 h-12 text-[#CF202F] mx-auto" />
+        <div className="text-center space-y-4 max-w-sm" role="alert">
+          <Icon icon="solar:server-bold" className="w-12 h-12 text-[#CF202F] mx-auto" aria-hidden="true" />
           <h2 className="text-lg font-semibold text-[#F3F7F4]">Unable to Load Dashboard</h2>
           <p className="text-sm text-[#93A09A]">{message}</p>
           <button
             onClick={onRetry}
-            className="px-6 py-2.5 rounded-full bg-[#22C55E] text-[#0A0F11] text-xs font-semibold hover:bg-[#16A34A] transition-colors"
+            className="min-h-11 px-6 py-2.5 rounded-full bg-[#22C55E] text-[#0A0F11] text-xs font-semibold hover:bg-[#16A34A] motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0F11]"
           >
             Try Again
           </button>
@@ -163,9 +185,13 @@ export default function InvestorDashboard() {
   const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const managerRedirected = useRef(false);
 
   const fetchAllData = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
     try {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
@@ -176,21 +202,23 @@ export default function InvestorDashboard() {
 
       const headers = { Authorization: `Bearer ${session.access_token}` };
 
-      const [profileRes, depositsRes, withdrawalsRes, kycRes, allocationsRes] = await Promise.all([
+      const [profileRes, depositsRes, withdrawalsRes, kycRes, allocationsRes, historyRes] = await Promise.all([
         fetch('/api/investor-profile', { headers }),
         fetch('/api/deposits', { headers }),
         fetch('/api/withdrawals', { headers }),
         fetch('/api/kyc', { headers }),
         fetch('/api/traders/my', { headers }),
+        fetch('/api/history', { headers }),
       ]);
 
-      const [profileData, depositsData, withdrawalsData, kycDataRes, allocationsData] = await Promise.all([
+      const [profileData, depositsData, withdrawalsData, kycDataRes, allocationsData, historyData] = await Promise.all([
         profileRes.ok ? profileRes.json() : Promise.resolve(null),
         depositsRes.ok ? depositsRes.json() : Promise.resolve([] as DepositRow[]),
         withdrawalsRes.ok ? withdrawalsRes.json() : Promise.resolve([] as WithdrawalRow[]),
         kycRes.ok ? kycRes.json() : Promise.resolve([] as KycRow[]),
         allocationsRes.ok ? allocationsRes.json() : Promise.resolve([] as Array<{ status?: string }>),
-      ]) as [Profile | null, DepositRow[], WithdrawalRow[], KycRow[], Array<{ status?: string }>];
+        historyRes.ok ? historyRes.json() : Promise.resolve([] as LedgerRow[]),
+      ]) as [Profile | null, DepositRow[], WithdrawalRow[], KycRow[], Array<{ status?: string }>, LedgerRow[]];
 
       if (profileData) {
         setProfileLoaded(true);
@@ -221,7 +249,31 @@ export default function InvestorDashboard() {
         return;
       }
 
-      if (profileData && approvedDeposits.length > 0) {
+      // Equity curve: replay the signed portfolio ledger chronologically so every
+      // balance event (deposit, profit credit, withdrawal) moves the chart and all
+      // three modes (area/line/bar) render the same movement.
+      const ledgerEvents = (Array.isArray(historyData) ? historyData : [])
+        .filter((e) => e && Number.isFinite(e.amountCents) && e.createdAt)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      if (profileData && ledgerEvents.length > 0) {
+        const totalDelta = ledgerEvents.reduce((sum, e) => sum + e.amountCents / 100, 0);
+        let running = profileData.balance >= totalDelta ? profileData.balance - totalDelta : 0;
+        const points: ChartPoint[] = ledgerEvents.map((e) => {
+          running = Math.round((running + e.amountCents / 100) * 100) / 100;
+          return {
+            date: new Date(e.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
+            value: running,
+          };
+        });
+        const last = points[points.length - 1];
+        if (last && Math.abs(last.value - profileData.balance) > 0.005) {
+          points.push({
+            date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
+            value: profileData.balance,
+          });
+        }
+        setChartData(points);
+      } else if (profileData && approvedDeposits.length > 0) {
         let cumulative = 0;
         const points: ChartPoint[] = approvedDeposits.map((d) => {
           cumulative += d.amountCents / 100;
@@ -245,22 +297,38 @@ export default function InvestorDashboard() {
       }
 
       const logs: ActivityLog[] = [
-        ...approvedDeposits.map((d) => ({
-          id: d.id,
-          date: new Date(d.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-          percentage: 0,
-          marketNote: `Deposit of $${(d.amountCents / 100).toLocaleString()} via ${d.method}`,
-        })),
-        ...approvedWithdrawals.map((w) => ({
-          id: String(w.id),
-          date: new Date(w.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-          percentage: 0,
-          marketNote: `Withdrawal of $${(w.amountCents / 100).toLocaleString()} to ${w.destination}`,
-        })),
-      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        ...approvedDeposits.map((d) => {
+          const created = new Date(d.createdAt);
+          const time = Number.isNaN(created.getTime()) ? 0 : created.getTime();
+          return {
+            id: d.id,
+            kind: 'deposit' as const,
+            date: created.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+            timestamp: time,
+            percentage: 0,
+            marketNote: `Deposit of $${formatMoneyTwoDecimals(d.amountCents / 100)} via ${d.method}`,
+          };
+        }),
+        ...approvedWithdrawals.map((w) => {
+          const created = new Date(w.createdAt);
+          const time = Number.isNaN(created.getTime()) ? 0 : created.getTime();
+          return {
+            id: String(w.id),
+            kind: 'withdrawal' as const,
+            date: created.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+            timestamp: time,
+            percentage: 0,
+            marketNote: `Withdrawal of $${formatMoneyTwoDecimals(w.amountCents / 100)} to ${w.destination}`,
+          };
+        }),
+      ].sort((a, b) => b.timestamp - a.timestamp);
 
       setDailyLogs(logs);
-    } catch { /* silent */ }
+    } catch {
+      setLoadError('We could not load your dashboard. Check your connection and try again.');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -268,6 +336,17 @@ export default function InvestorDashboard() {
   }, [fetchAllData]);
 
   const kycStatus = kycData.length > 0 ? kycData[0].status : profile.kycStatus;
+  const avatarSeed = encodeURIComponent(profile.name || profile.email || 'investor');
+  const avatarSrc = profile.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`;
+  const allTimePositive = profile.allTimeRoiPercent >= 0;
+
+  if (isLoading && !profileLoaded) {
+    return <LoadingSkeleton />;
+  }
+
+  if (loadError && !profileLoaded) {
+    return <ErrorState message={loadError} onRetry={() => void fetchAllData()} />;
+  }
 
   return (
     <div className="dashboard-shell min-h-screen bg-[#0A0F11] text-[#F3F7F4] flex flex-col md:flex-row font-sans">
@@ -280,7 +359,7 @@ export default function InvestorDashboard() {
         {/* Top Header Bar */}
         <div className="dashboard-header flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#263437] pb-5 sm:pb-6">
           <div className="flex items-center gap-3 min-w-0">
-            <img src={profile.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.name}`} alt={profile.name} className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-[#22C55E]/40 object-cover shadow-md shrink-0" />
+            <img src={avatarSrc} alt={profile.name || 'Investor avatar'} width={48} height={48} onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`; }} className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-[#22C55E]/40 object-cover shadow-md shrink-0" />
             <div className="min-w-0">
               <h1 className="text-lg sm:text-2xl font-normal text-[#F3F7F4] truncate">Hello, {profile.name}</h1>
               <p className="text-xs text-[#93A09A] flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -365,7 +444,7 @@ export default function InvestorDashboard() {
               <p className="text-xs uppercase font-mono tracking-wider text-[#93A09A]">Total Portfolio Balance</p>
               <div className="flex items-center gap-3 mt-1">
                 <h2 className="text-2xl sm:text-5xl font-mono font-semibold text-[#F3F7F4] break-all">
-                  {isMasked ? '••••••••' : `$${profile.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                  {isMasked ? '••••••••' : `$${formatMoneyTwoDecimals(profile.balance)}`}
                 </h2>
                 <button
                   onClick={() => setIsMasked(!isMasked)}
@@ -389,11 +468,11 @@ export default function InvestorDashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-[#263437]">
             <div>
               <p className="text-[10px] uppercase font-mono text-[#93A09A]">Total Invested</p>
-              <p className="text-base font-mono font-semibold text-[#F3F7F4]">${profile.totalInvested.toLocaleString()}</p>
+              <p className="text-base font-mono font-semibold text-[#F3F7F4]">${formatMoneyTwoDecimals(profile.totalInvested)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase font-mono text-[#93A09A]">Total ROI Profit</p>
-              <p className="text-base font-mono font-semibold text-[#22C55E]">+${profile.totalProfit.toLocaleString()}</p>
+              <p className="text-base font-mono font-semibold text-[#22C55E]">+${formatMoneyTwoDecimals(profile.totalProfit)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase font-mono text-[#93A09A]">Cycle ROI (7-day)</p>
@@ -403,7 +482,7 @@ export default function InvestorDashboard() {
             </div>
             <div>
               <p className="text-[10px] uppercase font-mono text-[#93A09A]">All-Time Return</p>
-              <p className="text-base font-mono font-semibold text-[#22C55E]">+{profile.allTimeRoiPercent}%</p>
+              <p className={`text-base font-mono font-semibold ${allTimePositive ? 'text-[#22C55E]' : 'text-[#CF202F]'}`}>{allTimePositive ? '+' : ''}{profile.allTimeRoiPercent}%</p>
             </div>
           </div>
         </div>
@@ -442,7 +521,7 @@ export default function InvestorDashboard() {
               </div>
             ) : (
               dailyLogs.map((log) => (
-                <div key={log.id} className="p-4 bg-[#0A0F11] border border-[#263437] rounded-xl flex items-start justify-between gap-3">
+                <div key={`${log.kind}-${log.id}`} className="p-4 bg-[#0A0F11] border border-[#263437] rounded-xl flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center ${log.percentage >= 0 ? 'bg-[#22C55E]/10 text-[#22C55E]' : 'bg-[#CF202F]/10 text-[#CF202F]'}`}>
                       <Icon icon={log.percentage >= 0 ? 'solar:graph-up-bold' : 'solar:graph-down-bold'} className="w-5 h-5" />

@@ -53,28 +53,31 @@ export default function AdminDashboard() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   function togglePlan(name: string) {
     setSelectedPlans(prev => (prev.includes(name) ? prev.filter(p => p !== name) : [...prev, name]));
   }
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch('/api/admin/dashboard', { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          setAumCents(data.aumCents ?? 0);
-          setPendingDeposits(data.pendingDeposits ?? 0);
-          setPendingWithdrawals(data.pendingWithdrawals ?? 0);
-          setPendingKyc(data.pendingKyc ?? 0);
-        }
-      } catch (e) {
-        console.error('Failed to load admin dashboard data', e);
-      } finally {
-        setLoading(false);
-      }
+  async function fetchData() {
+    setDashboardError(null);
+    try {
+      const res = await fetch('/api/admin/dashboard', { credentials: 'include' });
+      if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+      const data = await res.json();
+      setAumCents(data.aumCents ?? 0);
+      setPendingDeposits(data.pendingDeposits ?? 0);
+      setPendingWithdrawals(data.pendingWithdrawals ?? 0);
+      setPendingKyc(data.pendingKyc ?? 0);
+    } catch (e) {
+      console.error('Failed to load admin dashboard data', e);
+      setDashboardError('Could not load control-center stats. Check your connection and try again.');
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     async function fetchPlans() {
       try {
         const res = await fetch('/api/plans', { credentials: 'include' });
@@ -110,6 +113,17 @@ export default function AdminDashboard() {
         </div>
 
         {/* Action Counters Banner */}
+        {dashboardError && !loading && (
+          <div className="p-4 rounded-2xl bg-[#CF202F]/10 border border-[#CF202F]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3" role="alert">
+            <p className="text-xs text-[#F3F7F4]">{dashboardError}</p>
+            <button
+              onClick={() => { setLoading(true); fetchData(); }}
+              className="min-h-11 px-5 py-2 rounded-full bg-[#CF202F]/20 border border-[#CF202F]/40 text-xs font-semibold text-[#F3F7F4] hover:bg-[#CF202F]/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CF202F]"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
@@ -197,7 +211,8 @@ export default function AdminDashboard() {
             <div className="flex gap-2">
               <button
                 onClick={() => setMsgAudience('all')}
-                className={`flex-1 rounded-xl text-[10px] font-mono py-2.5 border transition-colors ${
+                aria-pressed={msgAudience === 'all'}
+                className={`min-h-11 flex-1 rounded-xl text-[10px] font-mono py-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6a85c] ${
                   msgAudience === 'all'
                     ? 'border-[#d6a85c]/50 bg-[#d6a85c]/10 text-[#d6a85c]'
                     : 'border-[#2B393F] bg-[#0D1215] text-[#93A09A] hover:text-white'
@@ -207,7 +222,8 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={() => setMsgAudience('plan')}
-                className={`flex-1 rounded-xl text-[10px] font-mono py-2.5 border transition-colors ${
+                aria-pressed={msgAudience === 'plan'}
+                className={`min-h-11 flex-1 rounded-xl text-[10px] font-mono py-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6a85c] ${
                   msgAudience === 'plan'
                     ? 'border-[#d6a85c]/50 bg-[#d6a85c]/10 text-[#d6a85c]'
                     : 'border-[#2B393F] bg-[#0D1215] text-[#93A09A] hover:text-white'
