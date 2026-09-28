@@ -32,16 +32,15 @@ export async function fetchLivePrices(symbols: string[]): Promise<Record<string,
   }
 
   const ids = cryptoSymbols.map(s => COINGECKO_IDS[s]).join(",");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(
       `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
       { signal: controller.signal, cache: "no-store" },
     );
-    clearTimeout(timeout);
     if (!res.ok) return buildFallback(symbols);
-    const data = await res.json();
+    const data = await res.json() as Record<string, { usd?: number }>;
     const result: Record<string, number> = {};
     for (const s of symbols) {
       const upper = s.toUpperCase();
@@ -55,6 +54,8 @@ export async function fetchLivePrices(symbols: string[]): Promise<Record<string,
     return result;
   } catch {
     return buildFallback(symbols);
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -66,4 +67,45 @@ function buildFallback(symbols: string[]): Record<string, number> {
     else result[upper] = FALLBACK_PRICES[upper] ?? 0;
   }
   return result;
+}
+
+// Fail-closed price fetch for mutating flows (e.g. swap execution).
+// Unlike fetchLivePrices (display fallback), this throws when live
+// prices are unavailable so execution never settles on stale prices.
+export async function fetchLivePricesOrThrow(
+  symbols: string[],
+): Promise<Record<string, number>> {
+  const uppers = symbols.map(s => s.toUpperCase());
+  const crypto = Array.from(new Set(uppers.filter(s => !isFiat(s))));
+  if (crypto.length === 0) {
+    const result: Record<string, number> = {};
+    for (const s of uppers) result[s] = 1;
+    return result;
+  }
+  for (const s of crypto) {
+    if (!COINGECKO_IDS[s]) throw new Error(`Unsupported asset: ${s}`);
+  }
+  const ids = crypto.map(s => COINGECKO_IDS[s]).join(",");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
+      { signal: controller.signal, cache: "no-store" },
+    );
+    if (!res.ok) throw new Error(`Price feed responded ${res.status}`);
+    const data = await res.json() as Record<string, { usd?: number }>;
+    const result: Record<string, number> = {};
+    for (const s of uppers) {
+      if (isFiat(s)) result[s] = 1;
+      else {
+        const price = data[COINGECKO_IDS[s]]?.usd;
+        if (!price) throw new Error(`Missing live price for ${s}`);
+        result[s] = price;
+      }
+    }
+    return result;
+  } finally {
+    clearTimeout(timeout);
+  }
 }

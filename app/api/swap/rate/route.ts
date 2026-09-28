@@ -54,7 +54,10 @@ export async function GET(request: Request) {
       feeBps,
       receiveAmount: receiveAmount.toFixed(6),
     });
-  } catch {
-    return NextResponse.json([]);
+  } catch (err) {
+    // Generic failure: keep the response shape stable ({ error }) and never
+    // leak provider internals. Unknown errors are 500s, not empty arrays.
+    console.error("[swap rate]", err);
+    return NextResponse.json({ error: "Could not load swap rate." }, { status: 500 });
   }
 }
