@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import InvestorSidebar from '@/components/InvestorSidebar';
 import SwapForm from '@/components/swap/SwapForm';
 import SwapPreview from '@/components/swap/SwapPreview';
@@ -22,12 +22,20 @@ export default function SwapPage() {
   const [success, setSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<'swap' | 'history'>('swap');
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (successTimer.current) clearTimeout(successTimer.current);
+    };
+  }, []);
 
   function handleSwapSuccess() {
     setQuote(null);
     setHistoryRefreshKey(key => key + 1);
     setSuccess(true);
-    setTimeout(() => setSuccess(false), 4000);
+    if (successTimer.current) clearTimeout(successTimer.current);
+    successTimer.current = setTimeout(() => setSuccess(false), 4000);
   }
 
   return (
@@ -40,10 +48,12 @@ export default function SwapPage() {
         </div>
 
         {/* Tab Toggle */}
-        <div className="flex gap-2">
+        <div className="flex gap-2" role="tablist" aria-label="Swap views">
           <button
+            role="tab"
+            aria-selected={activeTab === 'swap'}
             onClick={() => setActiveTab('swap')}
-            className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${
+            className={`min-h-11 px-4 py-2 rounded-full text-xs font-medium motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0F11] ${
               activeTab === 'swap'
                 ? 'bg-[#22C55E] text-[#0A0D0C]'
                 : 'bg-[#141C1F] border border-[#263437] text-[#93A09A] hover:border-[#22C55E]/50'
@@ -52,8 +62,10 @@ export default function SwapPage() {
             Swap
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'history'}
             onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${
+            className={`min-h-11 px-4 py-2 rounded-full text-xs font-medium motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0F11] ${
               activeTab === 'history'
                 ? 'bg-[#22C55E] text-[#0A0D0C]'
                 : 'bg-[#141C1F] border border-[#263437] text-[#93A09A] hover:border-[#22C55E]/50'
@@ -64,8 +76,8 @@ export default function SwapPage() {
         </div>
 
         {success && (
-          <div className="p-4 bg-[#22C55E]/10 border border-[#22C55E] rounded-xl text-xs text-[#22C55E] flex items-center gap-2">
-            <Icon icon="solar:check-circle-bold" className="w-5 h-5 shrink-0" />
+          <div role="status" aria-live="polite" className="p-4 bg-[#22C55E]/10 border border-[#22C55E] rounded-xl text-xs text-[#22C55E] flex items-center gap-2">
+            <Icon icon="solar:check-circle-bold" className="w-5 h-5 shrink-0" aria-hidden="true" />
             <span>Swap completed successfully!</span>
           </div>
         )}

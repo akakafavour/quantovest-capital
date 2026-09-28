@@ -34,6 +34,11 @@ export default function KycPage() {
 
   function chooseFile(file: File | null, setter: (value: File | null) => void) {
     if (!file) return;
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!allowed.includes(file.type)) {
+      setMessage('Documents must be JPG, PNG, WebP, or PDF.');
+      return;
+    }
     if (file.size > MAX_FILE_BYTES) {
       setMessage('Each document must be 10 MB or smaller.');
       return;
@@ -93,7 +98,7 @@ export default function KycPage() {
           <p className="mt-1 text-xs text-[#93A09A]">Upload your identity documents for manual review.</p>
         </div>
         <div className="max-w-2xl rounded-2xl border border-[#263437] bg-[#141C1F] p-6 sm:p-8 space-y-6">
-          {message && <div role="status" className="rounded-xl border border-[#22C55E]/40 bg-[#22C55E]/10 p-4 text-xs text-[#86EFAC]">{message}</div>}
+          {message && <div role="status" aria-live="polite" className="rounded-xl border border-[#22C55E]/40 bg-[#22C55E]/10 p-4 text-xs text-[#86EFAC]">{message}</div>}
           <div className="flex items-center justify-between rounded-xl border border-[#263437] bg-[#0A0F11] p-4 text-xs">
             <span className="text-[#93A09A]">Verification status</span>
             <span className="rounded-full bg-amber-500/20 px-3 py-1 font-mono text-amber-300">{loading ? 'LOADING' : (application?.status ?? 'NOT SUBMITTED').toUpperCase()}</span>
@@ -107,12 +112,13 @@ export default function KycPage() {
           ) : (
             <form onSubmit={submit} className="space-y-5">
               <label className="block text-xs text-[#93A09A]">Government ID
-                <input required type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={event => chooseFile(event.target.files?.[0] ?? null, setIdFile)} className="mt-2 w-full text-xs" />
+                <input required type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={event => chooseFile(event.target.files?.[0] ?? null, setIdFile)} className="mt-2 min-h-11 w-full text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] rounded" aria-describedby={idFile ? undefined : 'kyc-id-hint'} />
+                {!idFile && <span id="kyc-id-hint" className="mt-1 block text-[10px] text-[#93A09A]">JPG, PNG, WebP, or PDF up to 10 MB.</span>}
               </label>
               <label className="block text-xs text-[#93A09A]">Proof of address
-                <input required type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={event => chooseFile(event.target.files?.[0] ?? null, setAddressFile)} className="mt-2 w-full text-xs" />
+                <input required type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={event => chooseFile(event.target.files?.[0] ?? null, setAddressFile)} className="mt-2 min-h-11 w-full text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] rounded" />
               </label>
-              <button disabled={!idFile || !addressFile || submitting} className="w-full rounded-full bg-[#22C55E] py-3.5 text-xs font-semibold text-[#07110B] disabled:opacity-40">
+              <button disabled={!idFile || !addressFile || submitting} className="min-h-11 w-full rounded-full bg-[#22C55E] py-3.5 text-xs font-semibold text-[#07110B] disabled:opacity-40 motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0F11]">
                 {submitting ? 'Uploading…' : 'Submit KYC verification'}
               </button>
             </form>

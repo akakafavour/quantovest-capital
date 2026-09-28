@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import InvestorSidebar from '@/components/InvestorSidebar';
 import { Icon } from '@iconify/react';
 
@@ -50,6 +50,14 @@ export default function DepositPage() {
   const [instructionsError, setInstructionsError] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [amountError, setAmountError] = useState('');
+  const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (messageTimer.current) clearTimeout(messageTimer.current);
+    };
+  }, []);
 
   async function load() {
     setInstructionsLoading(true);
@@ -89,15 +97,53 @@ export default function DepositPage() {
 
   async function copyAddress() {
     if (activeInstruction) {
-      await navigator.clipboard.writeText(activeInstruction.details);
-      setMessage('Address copied to clipboard.');
-      setTimeout(() => setMessage(''), 3000);
+      try {
+        await navigator.clipboard.writeText(activeInstruction.details);
+        setMessage('Address copied to clipboard.');
+      } catch {
+        setMessage('Could not copy. Long-press the address to copy manually.');
+      }
+      if (messageTimer.current) clearTimeout(messageTimer.current);
+      messageTimer.current = setTimeout(() => setMessage(''), 3000);
     }
+  }
+
+  function handleAmountChange(value: number) {
+    setAmount(value);
+    if (!Number.isFinite(value) || value < 50) {
+      setAmountError('Minimum deposit is $50.');
+    } else if (selectedPlan && value < selectedPlan.minimumDepositCents / 100) {
+      setAmountError(`This plan requires at least $${(selectedPlan.minimumDepositCents / 100).toLocaleString()}.`);
+    } else {
+      setAmountError('');
+    }
+  }
+
+  function handleProofChange(file: File | null) {
+    if (!file) {
+      setProof(null);
+      return;
+    }
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      setMessage('Proof must be a JPG, PNG, or WebP image.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage('Proof image must be 10 MB or smaller.');
+      return;
+    }
+    setProof(file);
+    setMessage('');
   }
 
   async function submitDeposit(event: React.FormEvent) {
     event.preventDefault();
     setMessage('');
+    if (!Number.isFinite(amount) || amount < 50) {
+      setMessage('Minimum deposit is $50.');
+      return;
+    }
     if (!proof) {
       setMessage('Please upload the transaction confirmation screenshot before submitting.');
       return;
@@ -168,7 +214,7 @@ export default function DepositPage() {
         </div>
 
         {message && (
-          <div role="alert" className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-4 text-xs text-amber-100 animate-in fade-in duration-200">
+          <div role="alert" aria-live="assertive" className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-4 text-xs text-amber-100">
             {message}
           </div>
         )}
@@ -194,11 +240,12 @@ export default function DepositPage() {
             <section className="rounded-2xl border border-[#263437] bg-[#141C1F] p-6 sm:p-8 space-y-6">
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-[#93A09A]">Choose a plan or enter a custom amount</p>
-                <div className="grid grid-cols-1 gap-2">
+                <div className="grid grid-cols-1 gap-2" role="group" aria-label="Choose a plan">
                   <button
                     type="button"
                     onClick={() => choosePlan(null)}
-                    className={`flex items-center justify-between rounded-xl border p-3.5 text-xs transition-all ${
+                    aria-pressed={selectedPlan === null}
+                    className={`min-h-11 flex items-center justify-between rounded-xl border p-3.5 text-xs motion-safe:transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] ${
                       selectedPlan === null
                         ? 'border-[#22C55E] bg-[#22C55E]/10 text-white font-semibold'
                         : 'border-[#263437] bg-[#0A0F11] text-[#93A09A] hover:text-white'
@@ -212,7 +259,8 @@ export default function DepositPage() {
                       key={plan.id}
                       type="button"
                       onClick={() => choosePlan(plan)}
-                      className={`flex items-center justify-between rounded-xl border p-3.5 text-xs transition-all ${
+                      aria-pressed={selectedPlan?.id === plan.id}
+                      className={`min-h-11 flex items-center justify-between rounded-xl border p-3.5 text-xs motion-safe:transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] ${
                         selectedPlan?.id === plan.id
                           ? 'border-[#22C55E] bg-[#22C55E]/10 text-white font-semibold'
                           : 'border-[#263437] bg-[#0A0F11] text-[#93A09A] hover:text-white'
@@ -227,12 +275,14 @@ export default function DepositPage() {
 
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-[#93A09A]">Select Cryptocurrency</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2" role="group" aria-label="Select cryptocurrency">
                   {CRYPTO_COINS.map(coin => (
                     <button
                       key={coin.value}
+                      type="button"
                       onClick={() => setMethod(coin.value)}
-                      className={`flex items-center gap-2 rounded-xl border p-3.5 text-xs transition-all ${
+                      aria-pressed={method === coin.value}
+                      className={`min-h-11 flex items-center gap-2 rounded-xl border p-3.5 text-xs motion-safe:transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] ${
                         method === coin.value
                           ? 'border-[#22C55E] bg-[#22C55E]/10 text-white font-semibold'
                           : 'border-[#263437] bg-[#0A0F11] text-[#93A09A] hover:text-white'
@@ -260,8 +310,9 @@ export default function DepositPage() {
                       <p className="text-xs text-[#93A09A] mt-0.5">Transfer address:</p>
                     </div>
                     <button
+                      type="button"
                       onClick={() => void copyAddress()}
-                      className="text-xs font-semibold text-[#22C55E] hover:underline flex items-center gap-1"
+                      className="min-h-11 text-xs font-semibold text-[#22C55E] hover:underline flex items-center gap-1 px-2 py-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]"
                     >
                       <Icon icon="solar:copy-bold" className="w-3.5 h-3.5" />
                       Copy
@@ -297,7 +348,7 @@ export default function DepositPage() {
                 </div>
               )}
 
-              <form onSubmit={submitDeposit} className="space-y-4 pt-2">
+              <form onSubmit={submitDeposit} className="space-y-4 pt-2" noValidate={false}>
                 <label className="block text-xs text-[#93A09A]">
                   {selectedPlan ? `Deposit Amount — ${selectedPlan.name} Plan ($ USD)` : 'Custom Deposit Amount ($ USD)'}
                   <input
@@ -305,11 +356,14 @@ export default function DepositPage() {
                     min="50"
                     type="number"
                     value={amount}
-                    onChange={event => setAmount(Number(event.target.value))}
+                    onChange={event => handleAmountChange(Number(event.target.value))}
                     disabled={!!selectedPlan}
-                    className="mt-1.5 w-full rounded-xl border border-[#263437] bg-[#0A0F11] px-4 py-3 text-sm text-white focus:outline-none focus:border-[#22C55E] disabled:opacity-60"
+                    aria-invalid={amountError ? true : undefined}
+                    aria-describedby={amountError ? 'deposit-amount-error' : undefined}
+                    className="mt-1.5 min-h-11 w-full rounded-xl border border-[#263437] bg-[#0A0F11] px-4 py-3 text-sm text-white focus:outline-none focus:border-[#22C55E] focus-visible:ring-2 focus-visible:ring-[#22C55E] disabled:opacity-60"
                   />
                 </label>
+                {amountError && <p id="deposit-amount-error" role="alert" className="text-[11px] text-rose-400">{amountError}</p>}
 
                 <label className="block text-xs text-[#93A09A]">
                   Upload Transaction Screenshot / Proof
@@ -317,14 +371,14 @@ export default function DepositPage() {
                     required
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
-                    onChange={event => setProof(event.target.files?.[0] ?? null)}
-                    className="mt-1.5 w-full text-xs text-[#93A09A] file:mr-4 file:py-2.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#22C55E]/10 file:text-[#22C55E] hover:file:bg-[#22C55E]/20"
+                    onChange={event => handleProofChange(event.target.files?.[0] ?? null)}
+                    className="mt-1.5 min-h-11 w-full text-xs text-[#93A09A] file:mr-4 file:py-2.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#22C55E]/10 file:text-[#22C55E] hover:file:bg-[#22C55E]/20"
                   />
                 </label>
 
                 <button
-                  disabled={!activeInstruction || loading}
-                  className="w-full rounded-full bg-[#22C55E] py-3.5 text-xs font-semibold text-[#07110B] hover:bg-[#16A34A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={!activeInstruction || loading || !!amountError}
+                  className="min-h-11 w-full rounded-full bg-[#22C55E] py-3.5 text-xs font-semibold text-[#07110B] hover:bg-[#16A34A] motion-safe:transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0F11]"
                 >
                   {loading ? 'Submitting...' : 'Submit Deposit Proof'}
                 </button>
