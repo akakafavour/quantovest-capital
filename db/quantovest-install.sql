@@ -286,6 +286,22 @@ CREATE TABLE IF NOT EXISTS "platformSettings" (
   "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "auditLog" (
+  "id" serial PRIMARY KEY NOT NULL,
+  "actorId" varchar(191) NOT NULL,
+  "action" varchar(64) NOT NULL,
+  "targetType" varchar(64) NOT NULL,
+  "targetId" varchar(191) NOT NULL,
+  "details" json,
+  "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "rateLimits" (
+  "key" varchar(191) PRIMARY KEY NOT NULL,
+  "count" integer NOT NULL,
+  "windowStarted" timestamp with time zone NOT NULL
+);
+
 -- ── Indexes ────────────────────────────────────────────────────
 
 CREATE INDEX IF NOT EXISTS "accounts_user_idx" ON "accounts" USING btree ("userId");
@@ -322,6 +338,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS "push_subscriptions_endpoint_unique" ON "pushS
 CREATE INDEX IF NOT EXISTS "recovery_codes_user_idx" ON "recoveryCodes" USING btree ("userId");
 CREATE UNIQUE INDEX IF NOT EXISTS "recovery_codes_hash_unique" ON "recoveryCodes" USING btree ("codeHash");
 CREATE UNIQUE INDEX IF NOT EXISTS "platform_settings_key_unique" ON "platformSettings" USING btree ("settingKey");
+CREATE INDEX IF NOT EXISTS "audit_log_actor_idx" ON "auditLog" USING btree ("actorId");
+CREATE INDEX IF NOT EXISTS "audit_log_action_idx" ON "auditLog" USING btree ("action");
 
 -- ── Seed Plans ─────────────────────────────────────────────────
 -- Fixed-plan tiers. Assign-Plan credits the plan amount (minimumDepositCents).
@@ -363,6 +381,8 @@ ALTER TABLE public."investorWithdrawals" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."traders" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."plans" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."platformSettings" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."auditLog" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."rateLimits" ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
@@ -400,6 +420,8 @@ BEGIN
   CREATE POLICY plans_authenticated_read ON public."plans" FOR SELECT USING (auth.uid() IS NOT NULL AND active = 1);
   DROP POLICY IF EXISTS platform_settings_admin_access ON public."platformSettings";
   CREATE POLICY platform_settings_admin_access ON public."platformSettings" FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
+  DROP POLICY IF EXISTS audit_log_admin_access ON public."auditLog";
+  CREATE POLICY audit_log_admin_access ON public."auditLog" FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 END
 $$;
 
