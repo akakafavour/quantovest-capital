@@ -341,6 +341,100 @@ CREATE UNIQUE INDEX IF NOT EXISTS "platform_settings_key_unique" ON "platformSet
 CREATE INDEX IF NOT EXISTS "audit_log_actor_idx" ON "auditLog" USING btree ("actorId");
 CREATE INDEX IF NOT EXISTS "audit_log_action_idx" ON "auditLog" USING btree ("action");
 
+-- ── Foreign keys ─────────────────────────────────────────────────
+-- Idempotent: each constraint is added only if it does not already exist.
+-- Financial records use RESTRICT (a user with deposits/rewards cannot be
+-- deleted); user-owned rows use CASCADE; optional plan links use SET NULL.
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_accounts_user') THEN
+    ALTER TABLE public."accounts" ADD CONSTRAINT fk_accounts_user FOREIGN KEY ("userId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_sessions_user') THEN
+    ALTER TABLE public."sessions" ADD CONSTRAINT fk_sessions_user FOREIGN KEY ("userId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_deposits_investor') THEN
+    ALTER TABLE public."deposits" ADD CONSTRAINT fk_deposits_investor FOREIGN KEY ("investorId") REFERENCES public."users"("id") ON DELETE RESTRICT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_deposits_plan') THEN
+    ALTER TABLE public."deposits" ADD CONSTRAINT fk_deposits_plan FOREIGN KEY ("planId") REFERENCES public."plans"("id") ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_kyc_investor') THEN
+    ALTER TABLE public."kycApplications" ADD CONSTRAINT fk_kyc_investor FOREIGN KEY ("investorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ref_links_owner') THEN
+    ALTER TABLE public."referralLinks" ADD CONSTRAINT fk_ref_links_owner FOREIGN KEY ("ownerId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ref_attr_referrer') THEN
+    ALTER TABLE public."referralAttributions" ADD CONSTRAINT fk_ref_attr_referrer FOREIGN KEY ("referrerId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ref_attr_referred') THEN
+    ALTER TABLE public."referralAttributions" ADD CONSTRAINT fk_ref_attr_referred FOREIGN KEY ("referredInvestorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ref_attr_link') THEN
+    ALTER TABLE public."referralAttributions" ADD CONSTRAINT fk_ref_attr_link FOREIGN KEY ("linkId") REFERENCES public."referralLinks"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ref_rewards_attr') THEN
+    ALTER TABLE public."referralRewards" ADD CONSTRAINT fk_ref_rewards_attr FOREIGN KEY ("attributionId") REFERENCES public."referralAttributions"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ref_rewards_referrer') THEN
+    ALTER TABLE public."referralRewards" ADD CONSTRAINT fk_ref_rewards_referrer FOREIGN KEY ("referrerId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ref_rewards_referred') THEN
+    ALTER TABLE public."referralRewards" ADD CONSTRAINT fk_ref_rewards_referred FOREIGN KEY ("referredInvestorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ref_rewards_deposit') THEN
+    ALTER TABLE public."referralRewards" ADD CONSTRAINT fk_ref_rewards_deposit FOREIGN KEY ("qualifyingDepositId") REFERENCES public."deposits"("id") ON DELETE RESTRICT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ref_withdrawals_investor') THEN
+    ALTER TABLE public."referralWithdrawals" ADD CONSTRAINT fk_ref_withdrawals_investor FOREIGN KEY ("investorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_investor_accounts_user') THEN
+    ALTER TABLE public."investorAccounts" ADD CONSTRAINT fk_investor_accounts_user FOREIGN KEY ("investorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_investor_accounts_plan') THEN
+    ALTER TABLE public."investorAccounts" ADD CONSTRAINT fk_investor_accounts_plan FOREIGN KEY ("planId") REFERENCES public."plans"("id") ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_roi_investor') THEN
+    ALTER TABLE public."roiEntries" ADD CONSTRAINT fk_roi_investor FOREIGN KEY ("investorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_roi_plan') THEN
+    ALTER TABLE public."roiEntries" ADD CONSTRAINT fk_roi_plan FOREIGN KEY ("planId") REFERENCES public."plans"("id") ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ledger_investor') THEN
+    ALTER TABLE public."portfolioLedger" ADD CONSTRAINT fk_ledger_investor FOREIGN KEY ("investorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_withdrawals_investor') THEN
+    ALTER TABLE public."investorWithdrawals" ADD CONSTRAINT fk_withdrawals_investor FOREIGN KEY ("investorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_holdings_investor') THEN
+    ALTER TABLE public."portfolioHoldings" ADD CONSTRAINT fk_holdings_investor FOREIGN KEY ("investorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_alloc_investor') THEN
+    ALTER TABLE public."copyAllocations" ADD CONSTRAINT fk_alloc_investor FOREIGN KEY ("investorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_alloc_trader') THEN
+    ALTER TABLE public."copyAllocations" ADD CONSTRAINT fk_alloc_trader FOREIGN KEY ("traderId") REFERENCES public."traders"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_notifications_user') THEN
+    ALTER TABLE public."notifications" ADD CONSTRAINT fk_notifications_user FOREIGN KEY ("userId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_swap_investor') THEN
+    ALTER TABLE public."swapTransactions" ADD CONSTRAINT fk_swap_investor FOREIGN KEY ("investorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_push_user') THEN
+    ALTER TABLE public."pushSubscriptions" ADD CONSTRAINT fk_push_user FOREIGN KEY ("userId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_recovery_user') THEN
+    ALTER TABLE public."recoveryCodes" ADD CONSTRAINT fk_recovery_user FOREIGN KEY ("userId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_audit_actor') THEN
+    ALTER TABLE public."auditLog" ADD CONSTRAINT fk_audit_actor FOREIGN KEY ("actorId") REFERENCES public."users"("id") ON DELETE CASCADE;
+  END IF;
+END
+$$;
+
 -- ── Seed Plans ─────────────────────────────────────────────────
 -- Fixed-plan tiers. Assign-Plan credits the plan amount (minimumDepositCents).
 -- Matches the live production values.
