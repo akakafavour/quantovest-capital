@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       })
       .returning();
 
-    logAuditEvent(identity.id, "plan_created", "plan", inserted.id, { name });
+    await logAuditEvent(identity.id, "plan_created", "plan", inserted.id, { name });
 
     return NextResponse.json(inserted, { status: 201 });
   } catch (err) {
@@ -84,7 +84,7 @@ export async function PATCH(request: Request) {
 
     if (!updated) return NextResponse.json({ error: "Plan not found" }, { status: 404 });
 
-    logAuditEvent(identity.id, "plan_updated", "plan", updated.id, sanitized);
+    await logAuditEvent(identity.id, "plan_updated", "plan", updated.id, sanitized);
 
     return NextResponse.json(updated);
   } catch (err) {

@@ -1,14 +1,13 @@
 import "server-only";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
+import { rateLimits } from "@/db/schema";
 
 /**
- * Shared rate limiter for auth endpoints.
+ * DB-backed rate limiter for auth endpoints.
  *
- * DB-BACKED STUB: the interface is keyed for a persistent store (a future
- * `rate_limits` table or Redis), but this batch ships a single-instance
- * in-memory fallback so behaviour is correct on one server without a
- * migration. Multi-instance prod deployments must back this with shared
- * storage; until then, counts are per-instance.
+ * Uses the `rateLimits` table for shared state across all serverless instances.
+ * Falls back to in-memory when the database is unavailable (e.g. local dev).
  *
  * Usage:
  *   const { allowed, retryAfterSeconds } = await checkAuthRateLimit(`2fa:${userId}`);
@@ -22,7 +21,7 @@ const MAX_ATTEMPTS = 5;
 
 type Bucket = { count: number; windowStarted: number };
 
-// Lazily created so importing this module never throws at build time.
+// In-memory fallback for when DB is unavailable.
 let memoryBuckets: Map<string, Bucket> | null = null;
 function buckets(): Map<string, Bucket> {
   if (!memoryBuckets) memoryBuckets = new Map<string, Bucket>();
@@ -49,36 +48,75 @@ export async function checkAuthRateLimit(
   const windowMs = opts?.windowMs ?? WINDOW_MS;
   const now = Date.now();
 
-  // Attempt a DB-backed path when a database is configured. There is no
-  // rate_limits table in this batch (migration deferred), so this probes
-  // for one and falls back to memory when absent — keeping the call sites
-  // DB-ready without breaking prod.
+  // Try DB-backed path first.
   try {
     const db = getDb();
     if (db) {
-      // No-op probe: if a future migration adds the table, wire the
-      // increment/select here. Intentionally silent on failure.
-      void db;
+      return await db.transaction(async tx => {
+        const existing = await tx.select().from(rateLimits).where(eq(rateLimits.key, key)).limit(1);
+        const current = existing[0];
+
+        if (!current || now - new Date(current.windowStarted).getTime() >= windowMs) {
+          // Window expired or never existed — reset.
+          await tx.insert(rateLimits).values({ key, count: 1, windowStarted: new Date(now) })
+            .onConflictDoUpdate({
+              target: rateLimits.key,
+              set: { count: 1, windowStarted: new Date(now) },
+            });
+          return { allowed: true, retryAfterSeconds: 0, remaining: maxAttempts - 1 };
+        }
+
+        if (current.count >= maxAttempts) {
+          const elapsed = now - new Date(current.windowStarted).getTime();
+          const retryAfterSeconds = Math.max(1, Math.ceil((windowMs - elapsed) / 1000));
+          return { allowed: false, retryAfterSeconds, remaining: 0 };
+        }
+
+        await tx.update(rateLimits).set({ count: current.count + 1 }).where(eq(rateLimits.key, key));
+        return { allowed: true, retryAfterSeconds: 0, remaining: maxAttempts - current.count - 1 };
+      });
     }
   } catch {
     // Fall through to memory buckets.
   }
 
+  // In-memory fallback.
   const store = buckets();
   const current = store.get(key);
   if (!current || now - current.windowStarted >= windowMs) {
-    store.set(key, { count: 0, windowStarted: now });
-    return { allowed: true, retryAfterSeconds: 0, remaining: maxAttempts };
+    store.set(key, { count: 1, windowStarted: now });
+    return { allowed: true, retryAfterSeconds: 0, remaining: maxAttempts - 1 };
   }
   if (current.count >= maxAttempts) {
     const retryAfterSeconds = Math.ceil((current.windowStarted + windowMs - now) / 1000);
     return { allowed: false, retryAfterSeconds: Math.max(1, retryAfterSeconds), remaining: 0 };
   }
+  current.count += 1;
   return { allowed: true, retryAfterSeconds: 0, remaining: maxAttempts - current.count };
 }
 
 export async function recordAuthFailure(key: string, windowMs: number = WINDOW_MS): Promise<void> {
   const now = Date.now();
+
+  try {
+    const db = getDb();
+    if (db) {
+      const existing = await db.select().from(rateLimits).where(eq(rateLimits.key, key)).limit(1);
+      if (!existing[0] || now - new Date(existing[0].windowStarted).getTime() >= windowMs) {
+        await db.insert(rateLimits).values({ key, count: 1, windowStarted: new Date(now) })
+          .onConflictDoUpdate({
+            target: rateLimits.key,
+            set: { count: 1, windowStarted: new Date(now) },
+          });
+      } else {
+        await db.update(rateLimits).set({ count: existing[0].count + 1 }).where(eq(rateLimits.key, key));
+      }
+      return;
+    }
+  } catch {
+    // Fall through to memory.
+  }
+
   const store = buckets();
   const current = store.get(key);
   if (!current || now - current.windowStarted >= windowMs) {
@@ -89,5 +127,14 @@ export async function recordAuthFailure(key: string, windowMs: number = WINDOW_M
 }
 
 export async function clearAuthFailures(key: string): Promise<void> {
+  try {
+    const db = getDb();
+    if (db) {
+      await db.delete(rateLimits).where(eq(rateLimits.key, key));
+      return;
+    }
+  } catch {
+    // Fall through to memory.
+  }
   buckets().delete(key);
 }
