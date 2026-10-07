@@ -46,7 +46,7 @@ export async function PATCH(request: Request) {
       amountCents = withdrawal.amountCents;
       const status = body.action === 'approve' ? 'approved' : 'rejected';
       await tx.update(investorWithdrawals).set({ status, reviewedBy: identity.id, reviewNote: body.reviewNote?.trim() || null }).where(eq(investorWithdrawals.id, withdrawal.id));
-      const accounts = await tx.select().from(investorAccounts).where(eq(investorAccounts.investorId, withdrawal.investorId)).limit(1);
+      const accounts = await tx.select().from(investorAccounts).where(eq(investorAccounts.investorId, withdrawal.investorId)).limit(1).for('update');
       const account = accounts[0];
       if (body.action === 'approve') {
         // A withdrawal on an account flagged 'closing' is an account-closure request.

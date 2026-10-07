@@ -61,7 +61,8 @@ export async function POST(request: Request) {
           .from(investorAccounts)
           .leftJoin(plans, eq(investorAccounts.planId, plans.id))
           .where(and(eq(investorAccounts.investorId, body.investorId!), eq(investorAccounts.status, 'active')))
-          .limit(1);
+          .limit(1)
+          .for('update');
         if (!account[0]) throw new Error('Active investor account was not found.');
         const { account: investorAccount, plan } = account[0];
 

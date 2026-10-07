@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
       const creditCents = targetPlan[0].minimumDepositCents;
 
-      const existing = await tx.select().from(investorAccounts).where(eq(investorAccounts.investorId, body.investorId!)).limit(1);
+      const existing = await tx.select().from(investorAccounts).where(eq(investorAccounts.investorId, body.investorId!)).limit(1).for('update');
       const principalCents = existing[0]?.principalCents ?? 0;
 
       if (existing[0] && principalCents < targetPlan[0].minimumDepositCents) {
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     });
 
     const dollars = (result.creditedCents / 100).toFixed(2);
-    logAuditEvent(identity.id, 'plan_assigned', 'investor', result.investorId, { plan: result.plan, creditedCents: result.creditedCents });
+    await logAuditEvent(identity.id, 'plan_assigned', 'investor', result.investorId, { plan: result.plan, creditedCents: result.creditedCents });
     await notifyUser(result.investorId, 'plan_updated', 'Plan assigned', `Your account has been upgraded to the ${result.plan} plan and $${dollars} has been credited to your balance.`);
     try {
       const investor = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, result.investorId)).limit(1);
