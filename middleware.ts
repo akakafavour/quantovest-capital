@@ -91,10 +91,34 @@ export async function middleware(request: NextRequest) {
 
   const isAuthenticated = !!user;
 
-  const role = user?.app_metadata?.role ?? 'investor';
-  const isAdmin = role === 'admin';
-  const pendingTwoFactor = request.cookies.get('qv_2fa_pending')?.value === '1';
-  if (isAuthenticated && pendingTwoFactor && pathname !== '/verify-2fa' && !pathname.startsWith('/api/auth/2fa')) {
+  // Resolve role from the database (authoritative), not from app_metadata.
+  // app_metadata can be manipulated by the user via the Supabase Auth API,
+  // so it must never be trusted for authorization decisions.
+  // Uses the Supabase client (fetch-based, edge-compatible) rather than
+  // direct Postgres, which cannot run in middleware's Edge runtime.
+  let isAdmin = false;
+  let twoFactorEnabled = false;
+  if (isAuthenticated) {
+    try {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role,twoFactorEnabled')
+        .eq('id', user.id)
+        .limit(1)
+        .single();
+      if (profile) {
+        isAdmin = (profile as { role?: string }).role === 'admin';
+        twoFactorEnabled = (profile as { twoFactorEnabled?: boolean }).twoFactorEnabled === true;
+      }
+    } catch {
+      // Fail closed: if we can't verify the role, treat as non-admin.
+      isAdmin = false;
+    }
+  }
+
+  // Enforce 2FA for all authenticated users who have it enabled.
+  // Previously this only checked a cookie, which could expire or be cleared.
+  if (isAuthenticated && twoFactorEnabled && pathname !== '/verify-2fa' && !pathname.startsWith('/api/auth/2fa')) {
     const verified = await verifyTwoFactorToken(request.cookies.get('qv_2fa_verified')?.value, user.id).catch(() => false);
     if (!verified) {
       if (pathname.startsWith('/api/')) return NextResponse.json({ error: 'Two-factor verification required.' }, { status: 403 });

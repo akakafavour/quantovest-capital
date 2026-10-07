@@ -1,243 +1,233 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const middlewareSource = readFileSync(join(process.cwd(), "middleware.ts"), "utf8");
+/**
+ * Behavioral tests for middleware routing logic.
+ *
+ * These tests exercise the actual middleware function with mocked dependencies,
+ * rather than reading source code as text. This means refactoring the middleware
+ * (e.g. extracting helpers) won't break these tests as long as behavior is preserved.
+ */
 
-// ---------------------------------------------------------------------------
-// The helpers below are verbatim mirrors of the private route predicates in
-// middleware.ts (which are not exported, so prod code is untouched). The
-// "pins prod source" tests beneath fail if middleware.ts drifts from these
-// mirrors, keeping the matrix honest without modifying production code.
-// ---------------------------------------------------------------------------
-function mirrorIsPublicRoute(pathname: string): boolean {
-  if (
-    pathname === "/" ||
-    pathname === "/how-it-works" ||
-    pathname === "/about" ||
-    pathname === "/services" ||
-    pathname === "/plans" ||
-    pathname === "/faq" ||
-    pathname === "/contact" ||
-    pathname === "/login" ||
-    pathname === "/signup" ||
-    pathname === "/admin/login"
-  ) {
-    return true;
-  }
-  if (pathname.startsWith("/legal/")) return true;
-  if (pathname.startsWith("/api/plans")) return true;
-  if (pathname.startsWith("/api/auth/")) return true;
-  return false;
-}
+// ─── Mocks (hoisted to avoid initialization order issues) ────────────────────
 
-function mirrorIsInvestorRoute(pathname: string): boolean {
-  if (pathname.startsWith("/dashboard")) return true;
-  const investorApiRoutes = [
-    "/api/deposits",
-    "/api/withdrawals",
-    "/api/kyc",
-    "/api/uploads",
-    "/api/notifications",
-    "/api/profile",
-    "/api/history",
-    "/api/referrals",
-    "/api/deposit-instructions",
-    "/api/investor-profile",
-    "/api/portfolio",
-    "/api/swap",
-    "/api/traders",
-    "/api/push",
-  ];
-  return investorApiRoutes.some((route) => pathname.startsWith(route));
-}
+const { mockGetUser, mockVerifyTwoFactorToken, mockSupabaseFrom } = vi.hoisted(() => ({
+  mockGetUser: vi.fn(),
+  mockVerifyTwoFactorToken: vi.fn(),
+  mockSupabaseFrom: vi.fn(),
+}));
 
-function mirrorIsAdminRoute(pathname: string): boolean {
-  if (pathname.startsWith("/admin")) return true;
-  if (pathname.startsWith("/api/admin")) return true;
-  return false;
-}
-
-type TwoFactorGate =
-  | { outcome: "pass" }
-  | { outcome: "api-blocked"; status: number }
-  | { outcome: "page-redirect"; location: string };
-
-function mirrorTwoFactorGate(pathname: string, pending: boolean, verified: boolean): TwoFactorGate {
-  if (pending && pathname !== "/verify-2fa" && !pathname.startsWith("/api/auth/2fa")) {
-    if (!verified) {
-      if (pathname.startsWith("/api/")) return { outcome: "api-blocked", status: 403 };
-      return { outcome: "page-redirect", location: "/verify-2fa" };
-    }
-  }
-  return { outcome: "pass" };
-}
-
-/** Admins hitting investor routes are bounced to /admin except the allowlist. */
-function mirrorAdminOnInvestorRoute(pathname: string): "pass" | "/admin" {
-  if (
-    pathname === "/api/notifications" ||
-    pathname.startsWith("/api/notifications/") ||
-    pathname === "/api/investor-profile" ||
-    pathname.startsWith("/api/investor-profile/")
-  ) {
-    return "pass";
-  }
-  return "/admin";
-}
-
-describe("middleware routing matrix", () => {
-  it("should pin public-route branches when prod source is read", () => {
-    expect(middlewareSource).toContain("/admin/login");
-    expect(middlewareSource).toContain("/legal/");
-    expect(middlewareSource).toContain("/api/plans");
-    expect(middlewareSource).toContain("/api/auth/");
-  });
-
-  it("should pin investor, admin, 2FA and allowlist branches when prod source is read", () => {
-    expect(middlewareSource).toContain("/dashboard");
-    expect(middlewareSource).toContain("/api/deposit-instructions");
-    expect(middlewareSource).toContain("/api/admin");
-    expect(middlewareSource).toContain("qv_2fa_pending");
-    expect(middlewareSource).toContain("Two-factor verification required.");
-    expect(middlewareSource).toContain("/verify-2fa");
-    expect(middlewareSource).toContain("/api/auth/2fa");
-    expect(middlewareSource).toContain("/api/notifications");
-    expect(middlewareSource).toContain("/api/investor-profile");
-  });
-
-  it.each([
-    "/",
-    "/how-it-works",
-    "/about",
-    "/services",
-    "/plans",
-    "/faq",
-    "/contact",
-    "/login",
-    "/signup",
-    "/admin/login",
-    "/legal/terms",
-    "/legal/privacy",
-    "/api/plans",
-    "/api/plans/42",
-    "/api/auth/login",
-    "/api/auth/2fa/verify",
-  ])("should treat %s as public when it matches the public table", (pathname) => {
-    expect(mirrorIsPublicRoute(pathname)).toBe(true);
-  });
-
-  it.each([
-    "/dashboard",
-    "/admin",
-    "/admin/deposits",
-    "/api/admin/plans",
-    "/api/deposits",
-    "/api/withdrawals",
-    "/verify-2fa",
-  ])("should treat %s as protected when it is outside the public table", (pathname) => {
-    expect(mirrorIsPublicRoute(pathname)).toBe(false);
-  });
-
-  it.each([
-    "/dashboard",
-    "/dashboard/settings",
-    "/api/deposits",
-    "/api/withdrawals",
-    "/api/kyc",
-    "/api/uploads",
-    "/api/notifications",
-    "/api/profile",
-    "/api/history",
-    "/api/referrals",
-    "/api/deposit-instructions",
-    "/api/investor-profile",
-    "/api/portfolio",
-    "/api/swap",
-    "/api/swap/rate",
-    "/api/traders",
-    "/api/push/subscribe",
-  ])("should treat %s as an investor route when it matches the investor table", (pathname) => {
-    expect(mirrorIsInvestorRoute(pathname)).toBe(true);
-  });
-
-  it.each(["/", "/api/plans", "/admin", "/api/admin/deposits", "/api/auth/login"])(
-    "should not treat %s as an investor route when it is outside the investor table",
-    (pathname) => {
-      expect(mirrorIsInvestorRoute(pathname)).toBe(false);
+vi.mock("@supabase/ssr", () => ({
+  createServerClient: vi.fn(() => ({
+    auth: {
+      getUser: mockGetUser,
     },
-  );
+    from: mockSupabaseFrom,
+  })),
+}));
 
-  it.each(["/admin", "/admin/deposits", "/api/admin", "/api/admin/plans", "/api/admin/roi"])(
-    "should treat %s as an admin route when it matches the admin table",
-    (pathname) => {
-      expect(mirrorIsAdminRoute(pathname)).toBe(true);
+vi.mock("@/lib/2fa-session", () => ({
+  verifyTwoFactorToken: mockVerifyTwoFactorToken,
+}));
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+import { middleware } from "../../middleware";
+
+function createRequest(pathname: string, cookies: Record<string, string> = {}) {
+  const url = `http://localhost:3000${pathname}`;
+  return {
+    url,
+    nextUrl: { pathname, searchParams: new URLSearchParams() },
+    cookies: {
+      get: (name: string) => ({ value: cookies[name] }),
+      getAll: () => Object.entries(cookies).map(([name, value]) => ({ name, value })),
+      set: vi.fn(),
     },
-  );
+  } as any;
+}
 
-  it.each(["/api/plans", "/dashboard", "/api/deposits", "/api/auth/login", "/"])(
-    "should not treat %s as an admin route when it is outside the admin table",
-    (pathname) => {
-      expect(mirrorIsAdminRoute(pathname)).toBe(false);
-    },
-  );
+function mockUser(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "user-1",
+    email: "user@example.com",
+    app_metadata: {},
+    user_metadata: {},
+    ...overrides,
+  };
+}
 
-  it("should keep /api/plans public while /api/admin/plans stays admin-only", () => {
-    expect(mirrorIsPublicRoute("/api/plans")).toBe(true);
-    expect(mirrorIsAdminRoute("/api/plans")).toBe(false);
-    expect(mirrorIsPublicRoute("/api/admin/plans")).toBe(false);
-    expect(mirrorIsAdminRoute("/api/admin/plans")).toBe(true);
-    expect(mirrorIsInvestorRoute("/api/admin/plans")).toBe(false);
+function mockDbResponse(rows: any[]) {
+  const profile = rows[0] ?? null;
+  mockSupabaseFrom.mockReturnValue({
+    select: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        limit: vi.fn(() => ({
+          single: vi.fn(() => Promise.resolve({ data: profile })),
+        })),
+      })),
+    })),
+  });
+}
+
+// ─── Tests ───────────────────────────────────────────────────────────────────
+
+describe("middleware routing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "test-key";
   });
 
-  it("should return 403 for APIs when 2FA is pending and unverified", () => {
-    expect(mirrorTwoFactorGate("/api/deposits", true, false)).toEqual({
-      outcome: "api-blocked",
-      status: 403,
-    });
-    expect(mirrorTwoFactorGate("/api/portfolio", true, false)).toEqual({
-      outcome: "api-blocked",
-      status: 403,
+  describe("public routes", () => {
+    it.each([
+      "/",
+      "/how-it-works",
+      "/about",
+      "/services",
+      "/plans",
+      "/faq",
+      "/contact",
+      "/login",
+      "/signup",
+      "/admin/login",
+      "/legal/terms",
+      "/legal/privacy",
+      "/api/plans",
+      "/api/auth/login",
+    ])("should allow unauthenticated access to %s", async (pathname) => {
+      mockGetUser.mockResolvedValue({ data: { user: null } });
+      const req = createRequest(pathname);
+      const res = await middleware(req);
+      expect(res.status).not.toBe(401);
+      expect(res.status).not.toBe(403);
     });
   });
 
-  it("should redirect pages when 2FA is pending and unverified", () => {
-    expect(mirrorTwoFactorGate("/dashboard", true, false)).toEqual({
-      outcome: "page-redirect",
-      location: "/verify-2fa",
+  describe("protected routes", () => {
+    it("should redirect unauthenticated users from /dashboard to /login", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: null } });
+      const req = createRequest("/dashboard");
+      const res = await middleware(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/login");
     });
-    expect(mirrorTwoFactorGate("/admin", true, false)).toEqual({
-      outcome: "page-redirect",
-      location: "/verify-2fa",
+
+    it("should return 401 for unauthenticated API access to /api/deposits", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: null } });
+      const req = createRequest("/api/deposits");
+      const res = await middleware(req);
+      expect(res.status).toBe(401);
+    });
+
+    it("should redirect unauthenticated users from /admin to /login", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: null } });
+      const req = createRequest("/admin");
+      const res = await middleware(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/login");
     });
   });
 
-  it("should pass the 2FA gate for exempt paths when verification is pending", () => {
-    expect(mirrorTwoFactorGate("/verify-2fa", true, false)).toEqual({ outcome: "pass" });
-    expect(mirrorTwoFactorGate("/api/auth/2fa/verify", true, false)).toEqual({ outcome: "pass" });
-    expect(mirrorTwoFactorGate("/api/auth/2fa/setup", true, false)).toEqual({ outcome: "pass" });
+  describe("role-based access", () => {
+    it("should allow admin users to access /admin", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: mockUser() } });
+      mockDbResponse([{ role: "admin", twoFactorEnabled: false }]);
+      const req = createRequest("/admin");
+      const res = await middleware(req);
+      expect(res.status).not.toBe(403);
+      expect(res.status).not.toBe(307);
+    });
+
+    it("should redirect non-admin users from /admin to /dashboard", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: mockUser() } });
+      mockDbResponse([{ role: "investor", twoFactorEnabled: false }]);
+      const req = createRequest("/admin");
+      const res = await middleware(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/dashboard");
+    });
+
+    it("should redirect admin users from /dashboard to /admin", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: mockUser() } });
+      mockDbResponse([{ role: "admin", twoFactorEnabled: false }]);
+      const req = createRequest("/dashboard");
+      const res = await middleware(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/admin");
+    });
+
+    it("should allow admin access to /api/notifications (self-service allowlist)", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: mockUser() } });
+      mockDbResponse([{ role: "admin", twoFactorEnabled: false }]);
+      const req = createRequest("/api/notifications");
+      const res = await middleware(req);
+      expect(res.status).not.toBe(307);
+    });
+
+    it("should bounce admin from /api/deposits to /admin", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: mockUser() } });
+      mockDbResponse([{ role: "admin", twoFactorEnabled: false }]);
+      const req = createRequest("/api/deposits");
+      const res = await middleware(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/admin");
+    });
   });
 
-  it("should pass the 2FA gate when nothing is pending or verification succeeded", () => {
-    expect(mirrorTwoFactorGate("/dashboard", false, false)).toEqual({ outcome: "pass" });
-    expect(mirrorTwoFactorGate("/api/deposits", false, false)).toEqual({ outcome: "pass" });
-    expect(mirrorTwoFactorGate("/dashboard", true, true)).toEqual({ outcome: "pass" });
-    expect(mirrorTwoFactorGate("/api/deposits", true, true)).toEqual({ outcome: "pass" });
+  describe("2FA enforcement", () => {
+    it("should block API access when 2FA is enabled but not verified", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: mockUser() } });
+      mockDbResponse([{ role: "investor", twoFactorEnabled: true }]);
+      mockVerifyTwoFactorToken.mockResolvedValue(false);
+      const req = createRequest("/api/deposits");
+      const res = await middleware(req);
+      expect(res.status).toBe(403);
+    });
+
+    it("should redirect pages when 2FA is enabled but not verified", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: mockUser() } });
+      mockDbResponse([{ role: "investor", twoFactorEnabled: true }]);
+      mockVerifyTwoFactorToken.mockResolvedValue(false);
+      const req = createRequest("/dashboard");
+      const res = await middleware(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/verify-2fa");
+    });
+
+    it("should allow access when 2FA is enabled and verified", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: mockUser() } });
+      mockDbResponse([{ role: "investor", twoFactorEnabled: true }]);
+      mockVerifyTwoFactorToken.mockResolvedValue(true);
+      const req = createRequest("/api/deposits");
+      const res = await middleware(req);
+      expect(res.status).not.toBe(403);
+    });
+
+    it("should allow access to /verify-2fa even when 2FA is pending", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: mockUser() } });
+      mockDbResponse([{ role: "investor", twoFactorEnabled: true }]);
+      mockVerifyTwoFactorToken.mockResolvedValue(false);
+      const req = createRequest("/verify-2fa");
+      const res = await middleware(req);
+      expect(res.status).not.toBe(403);
+      expect(res.status).not.toBe(307);
+    });
+
+    it("should allow access when 2FA is not enabled", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: mockUser() } });
+      mockDbResponse([{ role: "investor", twoFactorEnabled: false }]);
+      const req = createRequest("/api/deposits");
+      const res = await middleware(req);
+      expect(res.status).not.toBe(403);
+    });
   });
 
-  it.each([
-    "/api/notifications",
-    "/api/notifications/unread",
-    "/api/investor-profile",
-    "/api/investor-profile/abc",
-  ])("should allow admins on %s when it is in the self-service allowlist", (pathname) => {
-    expect(mirrorAdminOnInvestorRoute(pathname)).toBe("pass");
+  describe("fail-closed behavior", () => {
+    it("should return 503 when Supabase env vars are missing", async () => {
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const req = createRequest("/dashboard");
+      const res = await middleware(req);
+      expect(res.status).toBe(503);
+    });
   });
-
-  it.each(["/dashboard", "/api/deposits", "/api/portfolio", "/api/swap", "/api/traders"])(
-    "should bounce admins to /admin from %s when it is outside the allowlist",
-    (pathname) => {
-      expect(mirrorAdminOnInvestorRoute(pathname)).toBe("/admin");
-    },
-  );
 });
