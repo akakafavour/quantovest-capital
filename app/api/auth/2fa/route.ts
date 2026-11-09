@@ -31,7 +31,8 @@ export async function POST(request: Request) {
   } | null;
   if (!body?.action) return NextResponse.json({ error: 'Action is required.' }, { status: 400 });
   if (body.action === 'challenge') {
-    cookies().set('qv_2fa_pending', '1', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 600, path: '/' });
+    const cookieStore = await cookies();
+    cookieStore.set('qv_2fa_pending', '1', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 600, path: '/' });
     return NextResponse.json({ challenged: true });
   }
   if (!body.code) return NextResponse.json({ error: 'Verification code is required.' }, { status: 400 });
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
     if (!limit.allowed) {
       return NextResponse.json({ error: TOO_MANY }, { status: 429, headers: rateLimitHeaders(limit) });
     }
-    if (!user.twoFactorEnabled || !user.twoFactorSecret || !(await verifyTOTP(user.twoFactorSecret, body.code))) {
+    if (!user.twoFactorEnabled || !user.twoFactorSecret || !(await verifyTOTP(user.twoFactorSecret, body.code, { preventReplay: true }))) {
       await recordAuthFailure(`2fa:verify:${actor.id}`);
       return NextResponse.json({ error: 'Invalid authenticator code.' }, { status: 400 });
     }
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
     if (!limit.allowed) {
       return NextResponse.json({ error: TOO_MANY }, { status: 429, headers: rateLimitHeaders(limit) });
     }
-    if (!user.twoFactorEnabled || !user.twoFactorSecret || !(await verifyTOTP(user.twoFactorSecret, body.code))) {
+    if (!user.twoFactorEnabled || !user.twoFactorSecret || !(await verifyTOTP(user.twoFactorSecret, body.code, { preventReplay: true }))) {
       await recordAuthFailure(`2fa:disable:${actor.id}`);
       return NextResponse.json({ error: 'Invalid authenticator code.' }, { status: 400 });
     }
@@ -83,5 +84,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ enabled: false });
   }
 
-  return NextResponse.json({ error: 'Unsupported 2FA action.' }, { status: 400 });
+  return NextResponse.json({ error: 'Unsupported action.' }, { status: 400 });
 }

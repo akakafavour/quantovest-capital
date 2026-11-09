@@ -2,8 +2,6 @@ import './globals.css';
 import type { Metadata } from 'next';
 import TawkToWidget from '@/components/TawkToWidget';
 
-export const dynamic = 'force-dynamic';
-
 export const metadata: Metadata = {
   title: 'Quantovest Capital — FX, Crypto & Stock Investment Platform',
   description: 'Start investing from $1,500. Follow expert portfolio managers across FX, Crypto, and Stocks. Track your returns live.',

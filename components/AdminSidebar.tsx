@@ -190,9 +190,6 @@ export default function AdminSidebar() {
           <button onClick={() => { setDrawerOpen(false); handleLogout(); }} disabled={loggingOut} className="min-h-11 flex items-center gap-2 text-[#93A09A] hover:text-[#F2F6F3] text-xs w-full disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4B860] rounded-lg">
             <Icon icon="solar:logout-3-bold" className="w-4 h-4" aria-hidden="true" />{loggingOut ? 'Signing out…' : 'Sign Out'}
           </button>
-          <Link href="/dashboard" className="flex items-center gap-2 text-[#93A09A] hover:text-[#F2F6F3] text-xs mt-3" onClick={() => setDrawerOpen(false)}>
-            <Icon icon="solar:user-bold" className="w-4 h-4" />Investor view
-          </Link>
         </div>
       </aside>
 
@@ -226,9 +223,6 @@ export default function AdminSidebar() {
           <button onClick={handleLogout} disabled={loggingOut} className="min-h-11 flex items-center gap-2 text-[#93A09A] hover:text-[#F2F6F3] text-xs w-full disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4B860] rounded-lg">
             <Icon icon="solar:logout-3-bold" className="w-4 h-4" aria-hidden="true" />{loggingOut ? 'Signing out…' : 'Sign Out'}
           </button>
-          <Link href="/dashboard" className="flex items-center gap-2 text-[#93A09A] hover:text-[#F2F6F3] text-xs mt-3">
-            <Icon icon="solar:user-bold" className="w-4 h-4" />Investor view
-          </Link>
         </div>
       </aside>
     </>

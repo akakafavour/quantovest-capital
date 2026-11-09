@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getCurrentIdentity } from '@/lib/supabase/identity';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const identity = await getCurrentIdentity();
   if (!identity) {

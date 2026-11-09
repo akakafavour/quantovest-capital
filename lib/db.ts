@@ -7,7 +7,7 @@ let client: postgres.Sql | undefined;
 
 function getClient() {
   const url = process.env.DATABASE_URL?.trim();
-  if (!url) return null;
+  if (!url || url.includes('<FILL')) return null;
   let hostname = '';
   try {
     const parsed = new URL(url);
@@ -16,22 +16,30 @@ function getClient() {
   } catch {
     return null;
   }
-  client ??= postgres(url, {
-    prepare: false,
-    max: 10,
-    idle_timeout: 20,
-    connect_timeout: 10,
-    // Supabase's PgBouncer pooler presents a certificate chain that Node
-    // cannot verify against public roots (SELF_SIGNED_CERT_IN_CHAIN), so the
-    // pooler documented posture is TLS encryption without chain verification
-    // (equivalent to sslmode=require). Full verification stays on everywhere
-    // else; localhost stays plaintext.
-    ssl: url.includes('localhost')
+
+  if (!client) {
+    const caCert = process.env.SUPABASE_POOLER_CA_CERT;
+    const isPooler = /\.pooler\.supabase\.com$/.test(hostname);
+
+    const sslConfig = url.includes('localhost')
       ? false
-      : /\.pooler\.supabase\.com$/.test(hostname)
-        ? { rejectUnauthorized: false }
-        : { rejectUnauthorized: true },
-  });
+      : isPooler && caCert
+        ? { rejectUnauthorized: true, ca: caCert }
+        : isPooler
+          ? { rejectUnauthorized: false }
+          : { rejectUnauthorized: true };
+
+    client = postgres(url, {
+      prepare: false,
+      max: 5,
+      idle_timeout: 15,
+      connect_timeout: 10,
+      ssl: sslConfig,
+      onclose: () => {
+        client = undefined;
+      },
+    });
+  }
   return client;
 }
 

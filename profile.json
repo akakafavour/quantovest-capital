@@ -1,0 +1,31 @@
+{
+  "projectType": "fintech-prototype",
+  "scale": "low",
+  "stack": {
+    "language": "TypeScript",
+    "framework": "Next.js 14 (App Router)",
+    "database": "PostgreSQL (Supabase, Drizzle ORM)",
+    "auth": "Supabase Auth (real)",
+    "storage": "Supabase Storage (real, KYC documents)",
+    "email": "Custom SMTP (Zoho)",
+    "orm": "Drizzle ORM",
+    "styling": "Tailwind CSS"
+  },
+  "skills": [
+    "production-hardening",
+    "resilience-patterns",
+    "security-hardening"
+  ],
+  "recommendations": [
+    "PII is the #1 risk: KYC documents, government IDs, bank details, emails are REAL. Encrypt at rest, restrict access, implement retention policies.",
+    "Rate limiting is in-memory only — replace with Redis/DB-backed store before any real traffic.",
+    "Audit logging is console.log — replace with persistent, tamper-evident audit trail for compliance.",
+    "Storage bucket policies need tightening — KYC documents should not be publicly accessible.",
+    "Add CSP, HSTS, and security headers before production.",
+    "Implement proper secrets management (Doppler, Vault, or at minimum env validation).",
+    "Add monitoring/alerting (Sentry, LogRocket) — currently flying blind.",
+    "2FA is implemented but recovery codes are stored — verify they are hashed (they are: codeHash).",
+    "Email system is custom SMTP — consider transactional email service (Resend/Postmark) for reliability.",
+    "No CI/CD pipeline — add automated testing and deployment before production."
+  ]
+}

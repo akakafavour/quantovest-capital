@@ -26,7 +26,6 @@ export async function logAuditEvent(
     timestamp: new Date(),
   };
 
-  // Persist to the database for a durable audit trail.
   try {
     const db = getDb();
     if (db) {
@@ -39,10 +38,10 @@ export async function logAuditEvent(
       });
     }
   } catch (error) {
-    // Never let audit logging crash the business operation.
     console.error("[AUDIT] Failed to persist audit event", error instanceof Error ? error.message : error);
   }
 
-  // Also log to console for development visibility.
-  console.log("[AUDIT]", JSON.stringify(event));
+  if (process.env.NODE_ENV !== 'production') {
+    console.log("[AUDIT]", JSON.stringify(event));
+  }
 }

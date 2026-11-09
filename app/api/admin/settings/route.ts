@@ -24,7 +24,8 @@ export async function GET() {
     const [row] = await db.select().from(platformSettings).where(eq(platformSettings.settingKey, 'global')).limit(1);
     return NextResponse.json({ ...DEFAULT_SETTINGS, ...(row?.settingValue as object ?? {}) });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Settings unavailable' }, { status: 500 });
+    console.error('[admin settings GET]', err);
+    return NextResponse.json({ error: 'Settings unavailable' }, { status: 500 });
   }
 }
 
@@ -47,6 +48,7 @@ export async function PUT(request: Request) {
     await db.insert(platformSettings).values({ settingKey: 'global', settingValue: value, updatedBy: identity.id }).onConflictDoUpdate({ target: platformSettings.settingKey, set: { settingValue: value, updatedBy: identity.id, updatedAt: new Date() } });
     return NextResponse.json(value);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Settings save failed' }, { status: 500 });
+    console.error('[admin settings PUT]', err);
+    return NextResponse.json({ error: 'Settings save failed' }, { status: 500 });
   }
 }

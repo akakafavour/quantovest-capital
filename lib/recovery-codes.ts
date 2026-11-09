@@ -45,6 +45,9 @@ export function hashCode(code: string, userId?: string): string {
       .update(userId ? `${userId}:${normalized}` : normalized)
       .digest("hex");
   }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("RECOVERY_CODE_PEPPER must be set in production.");
+  }
   return createHash("sha256").update(normalized).digest("hex");
 }
 

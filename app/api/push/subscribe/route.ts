@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       auth?: string;
     } | null;
 
-    if (!body?.endpoint || !body?.p256dh || !body?.auth) {
+    if (!body?.endpoint || !body?.p256dh || !body?.auth || !body.endpoint.startsWith("https://")) {
       return NextResponse.json({ error: "Invalid subscription" }, { status: 400 });
     }
 
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Subscribe failed." }, { status: 500 });
+    console.error("[push subscribe]", err);
+    return NextResponse.json({ error: "Subscribe failed." }, { status: 500 });
   }
 }

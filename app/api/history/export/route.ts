@@ -6,6 +6,15 @@ import { portfolioLedger } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
+function sanitizeCsvCell(value: string): string {
+  const trimmed = value.trim();
+  let safe = trimmed;
+  if (/^[=+\-@\t\r]/.test(safe)) {
+    safe = `'${safe}`;
+  }
+  return safe.replace(/"/g, '""');
+}
+
 export async function GET(request: Request) {
   const { identity, error } = await requireAuth();
   if (error) return error;
@@ -23,8 +32,8 @@ export async function GET(request: Request) {
     const csv = rows.map(r => {
       const date = new Date(r.createdAt).toLocaleDateString('en-US');
       const amount = (r.amountCents / 100).toFixed(2);
-      const desc = (r.description ?? '').replace(/"/g, '""');
-      const ref = (r.referenceId ?? '').replace(/"/g, '""');
+      const desc = sanitizeCsvCell(r.description ?? '');
+      const ref = sanitizeCsvCell(r.referenceId ?? '');
       return `"${date}","${r.type}","${amount}","${desc}","${ref}"`;
     }).join("\n");
 

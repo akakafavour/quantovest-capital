@@ -11,18 +11,14 @@ const nextConfig = {
     optimizePackageImports: ['recharts', 'framer-motion'],
   },
   async headers() {
-    // NOTE: script-src keeps 'unsafe-inline'/'unsafe-eval' because Next.js
-    // inlines runtime scripts; tightening to nonces is a follow-up that
-    // needs per-request nonce plumbing. frame-ancestors 'none' pairs with
-    // X-Frame-Options: DENY (clickjacking defense in depth).
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' data: https://fonts.gstatic.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.tawk.to https://embed.tawk.to",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to",
+      "font-src 'self' data: https://fonts.gstatic.com https://*.tawk.to",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https:",
-      "frame-src 'self'",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.tawk.to wss://*.tawk.to https:",
+      "frame-src 'self' https://*.tawk.to",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -43,6 +39,6 @@ const nextConfig = {
     ];
     return [{ source: '/:path*', headers: securityHeaders }];
   },
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

@@ -7,6 +7,7 @@ import { investorAccounts, investorWithdrawals, portfolioLedger, users } from '@
 import { notifyAdmins, notifyUser } from '@/lib/notifications';
 import { sendWithdrawalSubmitted } from '@/lib/email';
 import { verifyTOTP } from '@/lib/totp';
+import { checkAuthRateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,16 +28,24 @@ export async function GET() {
 export async function POST(request: Request) {
   const actor = await getCurrentIdentity();
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const rateLimit = await checkAuthRateLimit(`withdrawal:${actor.id}`, { maxAttempts: 5, windowMs: 60 * 1000 });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many withdrawal requests. Please wait a moment.' },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
+  }
+
   const db = getDb();
   if (!db) return databaseUnavailable('withdrawals POST');
   const body = await request.json().catch(() => null) as { amountCents?: number; destinationType?: 'bank' | 'crypto'; destination?: string; totpCode?: string; closeAccount?: boolean } | null;
   if (!body?.amountCents || !Number.isInteger(body.amountCents) || body.amountCents <= 0 || (body.destinationType !== 'bank' && body.destinationType !== 'crypto') || !body.destination?.trim()) return NextResponse.json({ error: 'A valid amount and bank or crypto destination are required.' }, { status: 400 });
-  // Server-side 2FA: the code is verified here against the stored secret.
-  // The secret itself is never exposed to the browser.
+
   const [twoFactor] = await db.select({ enabled: users.twoFactorEnabled, secret: users.twoFactorSecret }).from(users).where(eq(users.id, actor.id)).limit(1);
   if (twoFactor?.enabled) {
     const code = typeof body.totpCode === 'string' ? body.totpCode.trim() : '';
-    if (!twoFactor.secret || !(await verifyTOTP(twoFactor.secret, code))) {
+    if (!twoFactor.secret || !(await verifyTOTP(twoFactor.secret, code, { preventReplay: true }))) {
       return NextResponse.json({ error: 'Two-factor verification failed. Enter the 6-digit code from your authenticator app.' }, { status: 403 });
     }
   }

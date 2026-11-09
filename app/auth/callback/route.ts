@@ -6,11 +6,15 @@ import { referralLinks, referralAttributions, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { sendWelcomeEmail } from '@/lib/notifications';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
   const next = requestUrl.searchParams.get('next') || '/dashboard';
-  const referralCode = cookies().get('referral_code')?.value || null;
+  const cookieStore = await cookies();
+  const referralCode = cookieStore.get('referral_code')?.value || null;
+
   if (code) {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
@@ -40,7 +44,7 @@ export async function GET(request: Request) {
               email: data.user.email ?? '',
               name: authName,
               image: authAvatar,
-              role: 'investor',
+              // Preserves existing role — never demotes admins to investors
             },
           });
           const rows = await db.select({ twoFactorEnabled: users.twoFactorEnabled }).from(users).where(eq(users.id, data.user.id)).limit(1);

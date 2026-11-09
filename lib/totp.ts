@@ -70,10 +70,19 @@ function dynamicTruncate(hmac: Uint8Array): number {
   return binary % 1000000;
 }
 
+function constantTimeCodeEquals(computedCode: number, providedCode: string): boolean {
+  const aStr = computedCode.toString().padStart(6, '0');
+  const bStr = providedCode.padStart(6, '0');
+  if (aStr.length !== 6 || bStr.length !== 6) return false;
+  let diff = 0;
+  for (let i = 0; i < 6; i++) {
+    diff |= aStr.charCodeAt(i) ^ bStr.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 export function generateSecret(length = 20): string {
   const bytes = new Uint8Array(length);
-  // Fail closed: never fall back to Math.random() (predictable). Web Crypto
-  // is available in all supported browsers, Node 18+, and Edge runtimes.
   if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
     throw new Error('Secure random number generator is unavailable in this environment.');
   }
@@ -81,30 +90,42 @@ export function generateSecret(length = 20): string {
   return encodeBase32(bytes);
 }
 
-/**
- * Build the otpauth:// URI for a TOTP secret (does NOT render an image).
- */
 export function getTotpUri(email: string, secret: string): string {
   const issuer = 'Quantovest';
   return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}`;
 }
 
-/**
- * @deprecated SECURITY: renders the QR by sending the otpauth URI (which
- * contains the raw TOTP secret) to a third-party image API off-origin. Any
- * secret passed here leaks to that origin's logs. Kept only for backward
- * compat — new UI must render the QR code CLIENT-SIDE from `getTotpUri()`
- * output (e.g. a canvas QR renderer bundled with the app) so the secret
- * never leaves the user's browser. See components/totp-qr.tsx.
- */
 export function getQRCodeUrl(email: string, secret: string): string {
   const otpauth = getTotpUri(email, secret);
   return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(otpauth)}`;
 }
 
-export async function verifyTOTP(secret: string, code: string): Promise<boolean> {
+// In-memory sliding window replay cache for used codes (90-second TTL)
+const usedCodes = new Map<string, number>();
+
+function cleanExpiredCodes() {
+  const now = Date.now();
+  for (const [key, expiresAt] of usedCodes.entries()) {
+    if (now > expiresAt) usedCodes.delete(key);
+  }
+}
+
+export async function verifyTOTP(
+  secret: string,
+  code: string,
+  options?: { preventReplay?: boolean }
+): Promise<boolean> {
   if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) return false;
   if (!secret || secret.length < 8) return false;
+
+  cleanExpiredCodes();
+
+  const preventReplay = options?.preventReplay ?? false;
+  const replayKey = `${secret.slice(0, 10)}:${code}`;
+
+  if (preventReplay && usedCodes.has(replayKey)) {
+    return false;
+  }
 
   const keyBytes = decodeBase32(secret);
   const timeStep = Math.floor(Date.now() / 30000);
@@ -113,7 +134,13 @@ export async function verifyTOTP(secret: string, code: string): Promise<boolean>
     const counter = timeStep + offset;
     const counterBytes = counterToBytes(counter);
     const hmac = await hmacSHA1(keyBytes, counterBytes);
-    if (dynamicTruncate(hmac) === parseInt(code, 10)) return true;
+    const truncated = dynamicTruncate(hmac);
+    if (constantTimeCodeEquals(truncated, code)) {
+      if (preventReplay) {
+        usedCodes.set(replayKey, Date.now() + 90000);
+      }
+      return true;
+    }
   }
   return false;
 }

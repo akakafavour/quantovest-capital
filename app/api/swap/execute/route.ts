@@ -5,6 +5,7 @@ import { databaseUnavailable } from "@/lib/api-errors";
 import { investorAccounts, portfolioHoldings, swapTransactions, swapConfig, portfolioLedger } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { fetchLivePricesOrThrow, isFiat } from "@/lib/swap-prices";
+import { checkAuthRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,15 @@ function computeSwapAmounts(fromAmount: number, rate: number, feeBps: number) {
 export async function POST(request: Request) {
   const { identity, error } = await requireAuth();
   if (error) return error;
+
+  const rateLimit = await checkAuthRateLimit(`swap:${identity.id}`, { maxAttempts: 10, windowMs: 60 * 1000 });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many swap requests. Please wait a moment." },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
+  }
+
   const db = getDb();
   if (!db) return databaseUnavailable("swap execute POST");
 
@@ -190,8 +200,6 @@ export async function POST(request: Request) {
     if (message === "No active investor account found") {
       return NextResponse.json({ error: message }, { status: 400 });
     }
-    // Generic 500: never echo err.message for unknown failures — it can leak
-    // provider/DB internals (table names, balances, upstream payloads).
     console.error("[swap execute]", err);
     return NextResponse.json({ error: "Swap failed. Please try again." }, { status: 500 });
   }

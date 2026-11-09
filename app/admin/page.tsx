@@ -102,10 +102,7 @@ export default function AdminDashboard() {
         {/* Header */}
         <div className="border-b border-[#2B393F] pb-6 space-y-1">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#22C55E]/30 bg-[#22C55E]/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-[#22C55E] font-mono w-fit">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22C55E] opacity-60"></span>
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#22C55E]"></span>
-            </span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E]" />
             Staff Admin Console
           </div>
           <h1 className="text-2xl font-normal text-[#E8EFEB]">Trading Firm Control Center</h1>
@@ -248,7 +245,7 @@ export default function AdminDashboard() {
                         : 'border-[#2B393F] bg-[#0D1215] text-[#93A09A] hover:text-white'
                     }`}
                   >
-                    {active ? 'Γ£ô ' : ''}{name}
+                    {active ? '✓ ' : ''}{name}
                   </button>
                 );
               })}

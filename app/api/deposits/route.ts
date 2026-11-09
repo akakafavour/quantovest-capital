@@ -6,6 +6,7 @@ import { getDb } from '@/lib/db';
 import { deposits, investorAccounts, users } from '@/db/schema';
 import { sendDepositSubmitted } from '@/lib/email';
 import { databaseUnavailable } from '@/lib/api-errors';
+import { checkAuthRateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,15 @@ export async function GET() {
 export async function POST(request: Request) {
   const actor = await getCurrentIdentity();
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const rateLimit = await checkAuthRateLimit(`deposit:${actor.id}`, { maxAttempts: 10, windowMs: 60 * 1000 });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many deposit requests. Please wait a moment.' },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
+  }
+
   const db = getDb();
   if (!db) return databaseUnavailable('deposits POST');
   try {

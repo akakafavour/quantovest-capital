@@ -20,6 +20,8 @@ function isPublicRoute(pathname: string): boolean {
   if (pathname.startsWith('/legal/')) return true;
   if (pathname.startsWith('/api/plans')) return true;
   if (pathname.startsWith('/api/auth/')) return true;
+  if (pathname.startsWith('/api/health')) return true;
+  if (pathname.startsWith('/api/cron/')) return true;
   return false;
 }
 
@@ -50,8 +52,12 @@ function isAdminRoute(pathname: string): boolean {
   return false;
 }
 
-// Removed vulnerable manual cookie parsing functions
 export async function middleware(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production' && request.headers.get('x-forwarded-proto') === 'http') {
+    const host = request.headers.get('host') || request.nextUrl.host;
+    return NextResponse.redirect(`https://${host}${request.nextUrl.pathname}${request.nextUrl.search}`, 301);
+  }
+
   let response = NextResponse.next({ request });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -94,8 +100,6 @@ export async function middleware(request: NextRequest) {
   // Resolve role from the database (authoritative), not from app_metadata.
   // app_metadata can be manipulated by the user via the Supabase Auth API,
   // so it must never be trusted for authorization decisions.
-  // Uses the Supabase client (fetch-based, edge-compatible) rather than
-  // direct Postgres, which cannot run in middleware's Edge runtime.
   let isAdmin = false;
   let twoFactorEnabled = false;
   if (isAuthenticated) {
@@ -117,7 +121,6 @@ export async function middleware(request: NextRequest) {
   }
 
   // Enforce 2FA for all authenticated users who have it enabled.
-  // Previously this only checked a cookie, which could expire or be cleared.
   if (isAuthenticated && twoFactorEnabled && pathname !== '/verify-2fa' && !pathname.startsWith('/api/auth/2fa')) {
     const verified = await verifyTwoFactorToken(request.cookies.get('qv_2fa_verified')?.value, user.id).catch(() => false);
     if (!verified) {
@@ -158,8 +161,6 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
     if (isAdmin && !pathname.startsWith('/admin')) {
-      // Identity-scoped self-service APIs are safe for admins too (notification
-      // bell, sidebar profile). Everything else still redirects to /admin.
       if (
         pathname === '/api/notifications' ||
         pathname.startsWith('/api/notifications/') ||
